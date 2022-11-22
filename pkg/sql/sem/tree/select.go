@@ -79,15 +79,16 @@ func (node *ParenSelect) Format(ctx *FmtCtx) {
 
 // SelectClause represents a SELECT statement.
 type SelectClause struct {
-	From        From
-	DistinctOn  DistinctOn
-	Exprs       SelectExprs
-	GroupBy     GroupBy
-	Window      Window
-	Having      *Where
-	Where       *Where
-	Distinct    bool
-	TableSelect bool
+	From         From
+	DistinctOn   DistinctOn
+	Exprs        SelectExprs
+	GroupBy      GroupBy
+	Window       Window
+	Having       *Where
+	Where        *Where
+	Distinct     bool
+	TableSelect  bool
+	Hierarchical *Hierarchical
 }
 
 // Format implements the NodeFormatter interface.
@@ -1128,4 +1129,63 @@ func max(a, b byte) byte {
 		return a
 	}
 	return b
+}
+
+// Hierarchical represents a Hierarchical expression.
+type Hierarchical struct {
+	StartWith *StartWith
+	ConnectBy ConnectBy
+}
+
+func (node *Hierarchical) Format(ctx *FmtCtx) {
+}
+
+// StartWith specifies the root row(s) of the hierarchy.
+type StartWith struct {
+	Condition Expr
+}
+
+func (node *StartWith) Format(ctx *FmtCtx) {
+}
+
+// ConnectBy specifies the relationship between parent rows and child rows of the hierarchy.
+type ConnectBy struct {
+	Condition Expr
+	StartWith *StartWith
+	Nocycle   bool
+	Prior     int
+}
+
+func (node *ConnectBy) Format(ctx *FmtCtx) {
+}
+
+// Prior evaluates the immediately following expression for the parent row of the current row.
+type Prior struct {
+	Expr Expr
+}
+
+// TODO: ConnectRoot returns the column value using data from the root row.
+type ConnectRoot struct {
+	Cell Expr
+}
+
+// TODO: Level Pseudo column
+type Level struct {
+	Level int
+}
+
+// TODO: ConnectIsLeaf Pseudo column
+type ConnectIsLeaf struct {
+	IsLeaf bool
+}
+
+// TODO: ConnectIsCycle Pseudo column
+type ConnectIsCycle struct {
+	IsCycle bool
+}
+
+// TODO: SysConnectPath returns the path of a column value from root to node.
+type SysConnectPath struct {
+	Cell Expr
+	chr  rune
 }

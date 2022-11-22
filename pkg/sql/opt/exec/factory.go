@@ -360,3 +360,9 @@ const (
 	// Streaming means that the grouping columns are fully ordered.
 	Streaming
 )
+
+type HierarchicalInfo struct {
+	Cols      colinfo.ResultColumns
+	connectby tree.TypedExpr
+	startwith tree.TypedExpr
+}

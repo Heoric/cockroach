@@ -1021,6 +1021,7 @@ func (b *Builder) buildSelectClause(
 	}
 
 	b.buildWindow(outScope, fromScope)
+	b.buildHierarchical(sel.Hierarchical, fromScope)
 	b.validateLockingInFrom(sel, locking, fromScope)
 
 	// Construct the projection.

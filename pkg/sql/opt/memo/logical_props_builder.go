@@ -2578,6 +2578,35 @@ func (b *logicalPropsBuilder) buildMemoCycleTestRelProps(
 	rel.Cardinality = inputProps.Cardinality
 }
 
+func (b *logicalPropsBuilder) buildHierarchicalProps(
+	nc *HierarchicalExpr, rel *props.Relational,
+) {
+	BuildSharedProps(nc, &rel.Shared, b.evalCtx)
+
+	inputProps := nc.Input.Relational()
+
+	// Output Columns
+	rel.OutputCols = inputProps.OutputCols.Copy()
+
+	// Not Null Columns
+	rel.NotNullCols = inputProps.NotNullCols.Intersection(rel.OutputCols)
+
+	// Outer Columns
+	// -------------
+	// Outer columns were derived by BuildSharedProps; remove any that are bound
+	// by input columns.
+	rel.OuterCols.DifferenceWith(inputProps.OutputCols)
+
+	// Functional Dependencies
+	rel.FuncDeps.CopyFrom(&inputProps.FuncDeps)
+
+	// Cardinality
+	rel.Cardinality = inputProps.Cardinality
+
+	// TODO: statisticsBuilder
+	rel.Stats = inputProps.Stats
+}
+
 // WithUses returns the WithUsesMap for the given expression.
 func WithUses(r opt.Expr) props.WithUsesMap {
 	switch e := r.(type) {

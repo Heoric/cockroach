@@ -742,3 +742,9 @@ define AlterRangeRelocate {
     toStoreID tree.TypedExpr
     fromStoreID tree.TypedExpr
 }
+
+# Hierarchical executes a Hierarchical function over the given node.
+define Hierarchical {
+    Input exec.Node
+    Hierarchical exec.HierarchicalInfo
+}

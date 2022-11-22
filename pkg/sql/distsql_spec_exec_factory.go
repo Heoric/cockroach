@@ -1201,3 +1201,12 @@ func (e *distSQLSpecExecFactory) constructHashOrMergeJoin(
 	p.ResultColumns = resultColumns
 	return makePlanMaybePhysical(p, append(leftPlan.physPlan.planNodesToClose, rightPlan.physPlan.planNodesToClose...)), nil
 }
+
+// ConstructHierarchical is part of the exec.Factory interface.
+func (ef *distSQLSpecExecFactory) ConstructHierarchical(root exec.Node, wi exec.HierarchicalInfo) (exec.Node, error) {
+	p := &HierarchicalNode{
+		initial: root.(planNode),
+	}
+
+	return p, nil
+}

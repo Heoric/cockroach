@@ -133,6 +133,7 @@ const (
 	exprKindWhere
 	exprKindWindowFrameStart
 	exprKindWindowFrameEnd
+	exprKindHierachical
 )
 
 var exprKindName = [...]string{
@@ -154,6 +155,7 @@ var exprKindName = [...]string{
 	exprKindWhere:             "WHERE",
 	exprKindWindowFrameStart:  "WINDOW FRAME START",
 	exprKindWindowFrameEnd:    "WINDOW FRAME END",
+	exprKindHierachical:       "CONNECT BY",
 }
 
 func (k exprKind) String() string {

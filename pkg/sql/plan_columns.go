@@ -167,6 +167,8 @@ func getPlanColumns(plan planNode, mut bool) colinfo.ResultColumns {
 		}
 	case *rowSourceToPlanNode:
 		return n.planCols
+	case *HierarchicalNode:
+		return getPlanColumns(n.initial, mut)
 	}
 
 	// Every other node has no columns in their results.

@@ -781,6 +781,19 @@ func (u *sqlSymUnion) cursorScrollOption() tree.CursorScrollOption {
 func (u *sqlSymUnion) cursorStmt() tree.CursorStmt {
     return u.val.(tree.CursorStmt)
 }
+
+func (u *sqlSymUnion) hierarchical() *tree.Hierarchical {
+    return u.val.(*tree.Hierarchical)
+}
+
+func (u *sqlSymUnion) startWith() *tree.StartWith {
+    return u.val.(*tree.StartWith)
+}
+
+func (u *sqlSymUnion) connectBy() tree.ConnectBy {
+    return u.val.(tree.ConnectBy)
+}
+
 %}
 
 // NB: the %token definitions must come before the %type definitions in this
@@ -908,6 +921,8 @@ func (u *sqlSymUnion) cursorStmt() tree.CursorStmt {
 %token <str> YEAR
 
 %token <str> ZONE
+
+%token <str> NOCYCLE START_LA CONNECT PRIOR_LA
 
 // The grammar thinks these are keywords, but they are not in any category
 // and so can never be entered directly. The filter in scan.go creates these
@@ -1492,6 +1507,10 @@ func (u *sqlSymUnion) cursorStmt() tree.CursorStmt {
 %type <tree.ObjectNamePrefixList>  opt_in_schemas
 %type <tree.AlterDefaultPrivilegesTargetObject> alter_default_privileges_target_object
 
+%type <*tree.Hierarchical> hierarchical_query_clause
+%type <*tree.StartWith> start_with_clause opt_start_with_clause
+%type <tree.ConnectBy> connect_by_clause
+%type <bool> opt_nocycle
 
 // Precedence: lowest to highest
 %nonassoc  VALUES              // see value_clause
@@ -10051,6 +10070,63 @@ select_no_parens:
     $$.val = &tree.Select{With: $1.with(), Select: $2.selectStmt(), OrderBy: $3.orderBy(), Limit: $4.limit(), Locking: $5.lockingClause()}
   }
 
+hierarchical_query_clause:
+	 start_with_clause connect_by_clause
+	{
+		$$.val = &tree.Hierarchical {
+		  StartWith: $1.startWith(),
+			ConnectBy: $2.connectBy(),
+		}
+	}
+| connect_by_clause
+	{
+		$$.val = &tree.Hierarchical {
+			ConnectBy: $1.connectBy(),
+		}
+	}
+|
+	{
+		$$.val = (*tree.Hierarchical)(nil)
+	}
+
+start_with_clause:
+	START_LA WITH a_expr
+	{
+		$$.val = &tree.StartWith {
+			Condition : $3.expr(),
+		}
+	}
+
+connect_by_clause:
+	CONNECT BY opt_nocycle a_expr opt_start_with_clause
+	{
+		$$.val = tree.ConnectBy {
+			Nocycle   : $3.bool(),
+			Condition : $4.expr(),
+		  StartWith : $5.startWith(),
+		}
+	}
+
+opt_start_with_clause:
+	start_with_clause
+	{
+		 $$.val = $1.startWith()
+	}
+| /* EMPTY */
+	{
+		$$.val = (*tree.StartWith)(nil)
+	}
+
+opt_nocycle:
+	NOCYCLE
+	{
+		$$.val = true
+	}
+| /* EMPTY */
+	{
+		$$.val = false
+	}
+
 for_locking_clause:
   for_locking_items { $$.val = $1.lockingClause() }
 | FOR READ ONLY     { $$.val = (tree.LockingClause)(nil) }
@@ -10155,7 +10231,7 @@ simple_select:
 simple_select_clause:
   SELECT opt_all_clause target_list
     from_clause opt_where_clause
-    group_clause having_clause window_clause
+    group_clause having_clause window_clause hierarchical_query_clause
   {
     $$.val = &tree.SelectClause{
       Exprs:   $3.selExprs(),
@@ -10164,11 +10240,12 @@ simple_select_clause:
       GroupBy: $6.groupBy(),
       Having:  tree.NewWhere(tree.AstHaving, $7.expr()),
       Window:  $8.window(),
+      Hierarchical: $9.hierarchical(),
     }
   }
 | SELECT distinct_clause target_list
     from_clause opt_where_clause
-    group_clause having_clause window_clause
+    group_clause having_clause window_clause hierarchical_query_clause
   {
     $$.val = &tree.SelectClause{
       Distinct: $2.bool(),
@@ -10178,11 +10255,12 @@ simple_select_clause:
       GroupBy:  $6.groupBy(),
       Having:   tree.NewWhere(tree.AstHaving, $7.expr()),
       Window:   $8.window(),
+      Hierarchical: $9.hierarchical(),
     }
   }
 | SELECT distinct_on_clause target_list
     from_clause opt_where_clause
-    group_clause having_clause window_clause
+    group_clause having_clause window_clause hierarchical_query_clause
   {
     $$.val = &tree.SelectClause{
       Distinct:   true,
@@ -10193,6 +10271,7 @@ simple_select_clause:
       GroupBy:    $6.groupBy(),
       Having:     tree.NewWhere(tree.AstHaving, $7.expr()),
       Window:     $8.window(),
+      Hierarchical: $9.hierarchical(),
     }
   }
 | SELECT error // SHOW HELP: SELECT
@@ -11798,6 +11877,10 @@ interval_second:
 // So we use %prec annotations freely to set precedences.
 a_expr:
   c_expr
+| PRIOR_LA c_expr
+  {
+  	$$.val = tree.Prior{Expr: $2.expr()}
+  }
 | a_expr TYPECAST cast_target
   {
     $$.val = &tree.CastExpr{Expr: $1.expr(), Type: $3.typeReference(), SyntaxMode: tree.CastShort}
@@ -14621,6 +14704,9 @@ reserved_keyword:
 | WHERE
 | WINDOW
 | WITH
+| CONNECT
+| NOCYCLE
+| START_LA
 | cockroachdb_extra_reserved_keyword
 
 // Reserved keywords in CockroachDB, in addition to those reserved in

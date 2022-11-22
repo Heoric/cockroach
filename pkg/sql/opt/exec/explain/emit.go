@@ -328,6 +328,7 @@ var nodeNames = [...]string{
 	valuesOp:               "", // This node does not have a fixed name.
 	windowOp:               "window",
 	zigzagJoinOp:           "zigzag join",
+	hierarchicalOp:         "connect by",
 }
 
 func (e *emitter) joinNodeName(algo string, joinType descpb.JoinType) string {
@@ -852,6 +853,9 @@ func (e *emitter) emitNodeAttributes(n *Node) error {
 		if a.subjectReplicas != tree.RelocateLease {
 			ob.Expr("from", a.fromStoreID, nil /* columns */)
 		}
+
+	case hierarchicalOp:
+		//
 
 	case simpleProjectOp,
 		serializingProjectOp,

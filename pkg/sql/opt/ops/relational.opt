@@ -1303,3 +1303,13 @@ define FakeRel {
 define FakeRelPrivate {
     Props RelPropsPtr
 }
+
+[Relational]
+define Hierarchical {
+    Input RelExpr
+
+    Conectby FiltersExpr
+
+    Start FiltersExpr
+}
+

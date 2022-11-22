@@ -343,6 +343,9 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 	case *memo.ExportExpr:
 		ep, err = b.buildExport(t)
 
+	case *memo.HierarchicalExpr:
+		ep, err = b.buildHierarchical(t)
+
 	default:
 		switch {
 		case opt.IsSetOp(e):
@@ -2638,4 +2641,32 @@ var boundedStalenessAllowList = map[opt.Operator]struct{}{
 	opt.ProjectSetOp:       {},
 	opt.WindowOp:           {},
 	opt.ExplainOp:          {},
+}
+
+func (b *Builder) buildHierarchical(w *memo.HierarchicalExpr) (execPlan, error) {
+	input, err := b.buildRelational(w.Input)
+	if err != nil {
+		return execPlan{}, err
+	}
+	resultCols := make(colinfo.ResultColumns, input.outputCols.Len())
+
+	passthrough := w.Input.Relational().OutputCols
+
+	// All the passthrough cols will keep their ordinal index.
+	passthrough.ForEach(func(col opt.ColumnID) {
+		ordinal, _ := input.outputCols.Get(int(col))
+		resultCols[ordinal] = b.resultColumn(col)
+	})
+
+	//	ctx := input.makeBuildScalarCtx()
+
+	node, err := b.factory.ConstructHierarchical(input.root,
+		exec.HierarchicalInfo{
+			Cols: resultCols,
+			//	connectby: w.Conectby,
+			//	startwith tree.TypedExpr
+		},
+	)
+
+	return execPlan{root: node, outputCols: input.outputCols}, nil
 }

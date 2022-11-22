@@ -485,6 +485,11 @@ func (sb *statisticsBuilder) colStat(colSet opt.ColSet, e RelExpr) *props.Column
 	case opt.FakeRelOp:
 		rel := e.Relational()
 		return sb.colStatLeaf(colSet, &rel.Stats, &rel.FuncDeps, rel.NotNullCols)
+
+	case opt.HierarchicalOp:
+		// TODO: colStatHierarchical
+		return sb.colStatUnknown(colSet, e.Relational())
+
 	}
 
 	panic(errors.AssertionFailedf("unrecognized relational expression type: %v", redact.Safe(e.Op())))

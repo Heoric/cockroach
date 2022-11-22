@@ -293,6 +293,9 @@ func (v *planVisitor) visitInternal(plan planNode, name string) {
 
 	case *exportNode:
 		n.source = v.visit(n.source)
+
+	case *HierarchicalNode:
+		n.initial = v.visit(n.initial)
 	}
 }
 
@@ -459,4 +462,5 @@ var planNodeNames = map[reflect.Type]string{
 	reflect.TypeOf(&zeroNode{}):                         "norows",
 	reflect.TypeOf(&zigzagJoinNode{}):                   "zigzag join",
 	reflect.TypeOf(&schemaChangePlanNode{}):             "schema change",
+	reflect.TypeOf(&HierarchicalNode{}):                 "connect by",
 }

@@ -2173,3 +2173,13 @@ func makePublicToReturnColumnIndexMapping(
 ) []int {
 	return row.ColMapping(tableDesc.PublicColumns(), returnCols)
 }
+
+// ConstructHierarchical is part of the exec.Factory interface.
+func (ef *execFactory) ConstructHierarchical(root exec.Node, hi exec.HierarchicalInfo) (exec.Node, error) {
+	p := &HierarchicalNode{
+		initial: root.(planNode),
+		//	columns: hi.Cols,
+	}
+
+	return p, nil
+}
