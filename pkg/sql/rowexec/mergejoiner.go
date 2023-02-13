@@ -136,6 +136,8 @@ func (m *mergeJoiner) nextRow() (rowenc.EncDatumRow, *execinfrapb.ProducerMetada
 	// The loops below form a restartable state machine that iterates over a
 	// batch of rows from the left and right side of the join. The state machine
 	// returns a result for every row that should be output.
+	// 下面的循环形成了一个可重启的状态机，它从连接的左侧和右侧迭代一个 batch 中的行。
+	// 状态机为应该输出的每一行返回一个结果。
 
 	for {
 		for m.leftIdx < len(m.leftRows) {

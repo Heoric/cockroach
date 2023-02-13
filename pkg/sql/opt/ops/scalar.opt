@@ -166,6 +166,9 @@ define Projections {
 # are lazily calculated by traversing the Element scalar expression. This allows
 # the properties for the entire expression subtree to be calculated once and
 # then repeatedly reused.
+# ProjectionsItem 封装了合成输出列所需的信息，包括其 ColumnID 和产生其值的标量表达式。
+# 此外，ProjectionsItem 缓存一组标量属性，这些属性是通过遍历 Element 标量表达式延迟计算的。
+# 这允许对整个表达式子树的属性进行一次计算，然后重复使用。
 #
 # The Element scalar expression cannot contain a simple VariableOp with the same
 # ColumnID as the one stored in the Col field, since that would make it a
@@ -173,6 +176,9 @@ define Projections {
 # Project operator instead. However, the Element field can contain a VariableOp
 # when a new ColumnID is being assigned, such as in the case of an outer column
 # reference.
+# Element 标量表达式不能包含与 Col 字段中存储的 ColumnID 相同的简单 VariableOp，
+# 因为那样会使它成为传递列。 传递列始终存储在包含项目的运算符上。
+# 但是，在分配新的 ColumnID 时，Element 字段可以包含 VariableOp，例如在外部列引用的情况下。
 [Scalar, ListItem, ScalarProps]
 define ProjectionsItem {
     Element ScalarExpr

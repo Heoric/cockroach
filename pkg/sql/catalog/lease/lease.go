@@ -9,6 +9,7 @@
 // licenses/APL.txt.
 
 // Package lease provides functionality to create and manage sql schema leases.
+// 包租约提供创建和管理 sql 模式租约的功能。
 package lease
 
 import (
@@ -55,6 +56,7 @@ var errRenewLease = errors.New("renew lease on id")
 var errReadOlderVersion = errors.New("read older descriptor version from store")
 
 // LeaseDuration controls the duration of sql descriptor leases.
+// LeaseDuration 控制 sql 描述符租用的持续时间。
 var LeaseDuration = settings.RegisterDurationSetting(
 	settings.TenantWritable,
 	"sql.catalog.descriptor_lease_duration",

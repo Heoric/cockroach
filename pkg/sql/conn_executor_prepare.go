@@ -39,6 +39,8 @@ func (ex *connExecutor) execPrepare(
 	// Preparing needs a transaction because it needs to retrieve db/table
 	// descriptors for type checking. This implicit txn will be open until
 	// the Sync message is handled.
+	// 准备需要一个事务，因为它需要检索数据库/表描述符以进行类型检查。
+	// 在处理同步消息之前，此隐式 txn 将打开。
 	if _, isNoTxn := ex.machine.CurState().(stateNoTxn); isNoTxn {
 		return ex.beginImplicitTxn(ctx, parseCmd.AST)
 	} else if _, isAbortedTxn := ex.machine.CurState().(stateAborted); isAbortedTxn {
@@ -51,6 +53,7 @@ func (ex *connExecutor) execPrepare(
 	defer sp.Finish()
 
 	// The anonymous statement can be overwritten.
+	// 匿名语句可以被覆盖。
 	if parseCmd.Name != "" {
 		if _, ok := ex.extraTxnState.prepStmtsNamespace.prepStmts[parseCmd.Name]; ok {
 			err := pgerror.Newf(
@@ -61,6 +64,7 @@ func (ex *connExecutor) execPrepare(
 		}
 	} else {
 		// Deallocate the unnamed statement, if it exists.
+		// 释放未命名的语句，如果它存在的话。
 		ex.deletePreparedStmt(ctx, "")
 	}
 

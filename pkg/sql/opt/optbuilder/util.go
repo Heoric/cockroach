@@ -189,14 +189,21 @@ func (b *Builder) expandStarAndResolveType(
 // operations such as projection of scalar expressions and aggregations. For
 // example, the query `SELECT (x + 1) AS "x_incr" FROM t` has a projection with
 // a synthesized column "x_incr".
+// synthesizeColumn 用于合成新列。 这对于标量表达式和聚合的投影等操作是必需的。
+// 例如，查询 `SELECT (x + 1) AS "x_incr" FROM t` 有一个带有合成列“x_incr”的投影。
 //
 // scope  The scope is passed in so it can can be updated with the newly bound
 //        variable.
+// scope 范围被传入，所以它可以用新绑定的变量更新。
 // name   This is the name for the new column (e.g., if specified with
 //        the AS keyword).
+// name 这是新列的名称（例如，如果使用 AS 关键字指定）。
 // typ    The type of the column.
+// typ 列的类型。
 // expr   The expression this column refers to (if any).
+// expr 此列引用的表达式（如果有）。
 // scalar The scalar expression associated with this column (if any).
+// scalar 与此列关联的标量表达式（如果有）。
 //
 // The new column is returned as a scopeColumn object.
 func (b *Builder) synthesizeColumn(
@@ -317,6 +324,9 @@ func colIndex(numOriginalCols int, expr tree.Expr, context string) int {
 // If there are no aliases in columns that expr refers to, then -1 is returned.
 // This method is pertinent to ORDER BY and DISTINCT ON clauses that may refer
 // to a column alias.
+// colIdxByProjectionAlias 返回可能引用列别名的表达式的列中的相应索引。
+// 如果 expr 引用的列中没有别名，则返回 -1。
+// 此方法与可能引用列别名的 ORDER BY 和 DISTINCT ON 子句相关。
 func colIdxByProjectionAlias(expr tree.Expr, op string, scope *scope) int {
 	index := -1
 
@@ -435,6 +445,7 @@ func (b *Builder) resolveAndBuildScalar(
 	// We need to save and restore the previous value of the field in
 	// semaCtx in case we are recursively called within a subquery
 	// context.
+	// 我们需要保存和恢复 semaCtx 中字段的先前值，以防我们在子查询上下文中被递归调用。
 	defer b.semaCtx.Properties.Restore(b.semaCtx.Properties)
 	b.semaCtx.Properties.Require(context.String(), flags)
 
@@ -595,6 +606,8 @@ func (b *Builder) resolveTableRef(ref *tree.TableRef, priv privilege.Kind) cat.T
 // along with the table's MDDepName and data source name. If the name does not
 // resolve to a table, or if the current user does not have the given privilege,
 // then resolveDataSource raises an error.
+// resolveDataSource 返回目录中给定名称的数据源，以及表的 MDDepName 和数据源名称。
+// 如果名称未解析为表，或者当前用户没有给定的权限，则 resolveDataSource 会引发错误。
 //
 // If the b.qualifyDataSourceNamesInAST flag is set, tn is updated to contain
 // the fully qualified name.
@@ -604,6 +617,7 @@ func (b *Builder) resolveDataSource(
 	var flags cat.Flags
 	if b.insideViewDef {
 		// Avoid taking table leases when we're creating a view.
+		// 在我们创建视图时避免使用表租约。
 		flags.AvoidDescriptorCaches = true
 	}
 	ds, resName, err := b.catalog.ResolveDataSource(b.ctx, flags, tn)
@@ -715,6 +729,7 @@ type columnKinds struct {
 
 // tableOrdinals returns a slice of ordinals that correspond to table columns of
 // the desired kinds.
+// tableOrdinals 返回对应于所需种类的表列的 序号切片。
 func tableOrdinals(tab cat.Table, k columnKinds) []int {
 	n := tab.ColumnCount()
 	shouldInclude := [...]bool{

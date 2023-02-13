@@ -173,20 +173,26 @@ type ColumnKind uint8
 const (
 	// Ordinary columns are "regular" table columns (including hidden columns
 	// like `rowid` and virtual computed columns).
+	// 普通列是“常规”表列（包括隐藏列，如 `rowid` 和虚拟计算列）。
 	Ordinary ColumnKind = iota
 	// WriteOnly columns are mutation columns that have to be updated on writes
 	// (inserts, updates, deletes) and cannot be otherwise accessed.
+	// WriteOnly 列是必须在写入（插入、更新、删除）时更新并且不能以其他方式访问的突变列。
 	WriteOnly
 	// DeleteOnly columns are mutation columns that have to be updated only on
 	// deletes and cannot be otherwise accessed.
+	// DeleteOnly 列是变异列，必须仅在删除时更新并且不能以其他方式访问。
 	DeleteOnly
 	// System columns are implicit columns that every physical table
 	// contains. These columns can only be read from and must not be included
 	// as part of mutations. They also cannot be part of the lax or key columns
 	// for indexes. System columns are not members of any column family.
+	// 系统列是每个物理表都包含的隐式列。 这些列只能读取，不能作为突变的一部分包含在内。
+	// 它们也不能是索引的 lax 或 key 列的一部分。 系统列不是任何列族的成员。
 	System
 	// Inverted columns are implicit columns that represent the keys of inverted
 	// indexes.
+	// 倒排列是表示倒排索引键的隐式列。
 	Inverted
 )
 

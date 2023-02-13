@@ -4,12 +4,14 @@
 
 This codelab will walk you through adding a new SQL function and its associated
 tests.
+此 Codelab 将引导您完成添加新 SQL 函数及其相关测试的过程。
 
 ## Getting Started
 
 Before we get started, you need to download the CockroachDB source code and
 ensure you have all of the prerequisites needed for development. See
 [CONTRIBUTING.md] doc for details.
+在我们开始之前，您需要下载 CockroachDB 源代码并确保您具备开发所需的所有先决条件。
 
 ## Adding a SQL Function
 
@@ -17,6 +19,7 @@ Currently, CockroachDB only supports [built-in SQL functions][built-ins]. We’r
 going to walk through the process of adding a new built-in function and an
 associated test. Along the way you’ll see a bit of the SQL code layout, parts of
 the type system and part of the logic test infrastructure.
+我们将逐步完成添加新内置函数和相关测试的过程。 在此过程中，您将看到一些 SQL 代码布局、部分类型系统和部分逻辑测试基础结构。
 
 ### Built-ins
 
@@ -37,19 +40,23 @@ type Overload struct {
 diversity of built-in functions. Three important fields for us to pay
 attention to are the argument types (`Types`), the return type
 (`ReturnType`) and the implementation function pointer (`Fn`).
+`Overload`包含多个字段，体现了内置函数的多样性。 我们需要注意的三个重要字段是参数类型 (`Types`)、返回类型 (`ReturnType`) 和实现函数指针 (`Fn`)。
 
 Multiple function overloads are then grouped into a single "built-in
 definition" (`builtinDefinition` in `builtins/builtins.go`), and
 during CockroachDB initialization transformed into a
 `FunctionDefinition` (in `builtins/all_builtins.go`).
+然后将多个函数重载分组到一个“内置定义”（builtins/builtins.go 中的 builtinDefinition），并在 CockroachDB 初始化期间转换为 FunctionDefinition（builtins/all_builtins.go）。
 
 For example, `abs` has an overload for each numeric type (`float`,
 `decimal`, and `int`). The type system takes care of selecting the
 correct version of a function given the name and the argument
 types.
+例如，`abs` 对每种数字类型（`float`、`decimal` 和 `int`）都有一个重载。 类型系统负责根据名称和参数类型选择函数的正确版本。
 
 The SQL execution engine finds the `builtinDefinition` structure
 given the name of a function using the `builtins` map:
+SQL 执行引擎使用 builtins 映射找到给定函数名称的 builtinDefinition 结构：
 
 ```go
 var builtins = map[string]builtinDefinition{...}
@@ -58,7 +65,8 @@ var builtins = map[string]builtinDefinition{...}
 Notice that this is a map from `string` to `builtinDefinition`, which
 contains a slice of `Overload`s via the member field
 `Overloads`. The `Overloads` slice is used to distinguish the
-"overloads" for a given function. 
+"overloads" for a given function.
+请注意，这是一个从“string”到“builtinDefinition”的映射，它通过成员字段“Overloads”包含一片“Overload”。 `Overloads` 切片用于区分给定函数的“重载”。
 
 ### What’s Your Name
 
@@ -66,10 +74,12 @@ We’re going to add a new SQL function: `whois()`. This function will take a
 variable number of usernames and return the corresponding real names. For
 example, `whois('pmattis')` will return `'Peter Mattis'`. For simplicity, the
 mapping of usernames to real names will be hardcoded. Let’s get started.
+我们将添加一个新的 SQL 函数：`whois()`。 此函数将采用可变数量的用户名并返回相应的真实姓名。 例如，`whois('pmattis')` 将返回 `'Peter Mattis'`。 为简单起见，用户名到真实姓名的映射将被硬编码。 让我们开始吧。
 
 The `builtins` map is divided up into sections by function category, but this
 organization is purely for readability. We can add our function anywhere, so
 let’s add it right at the top of the definition for simplicity:
+`builtins` 映射按功能类别划分为多个部分，但这种组织纯粹是为了便于阅读。 我们可以在任何地方添加我们的函数，所以为了简单起见，让我们把它添加到定义的顶部：
 
 ```go
 var builtins = map[string]builtinDefinition{
@@ -89,10 +99,12 @@ This is the skeleton of our built-in. The `Types` field indicates our function
 takes a variable number of string arguments. The `ReturnType` field indicates
 our function returns a string. The implementation of our function is currently
 unfinished, so we’ll return an error for now.
+这是我们内置的骨架。 `Types` 字段表示我们的函数采用可变数量的字符串参数。 `ReturnType` 字段表示我们的函数返回一个字符串。 我们函数的实现目前尚未完成，所以我们暂时返回一个错误。
 
 Go ahead and add the above code to `pkg/sql/sem/builtins/builtins.go`. If you’ve
 followed the instructions in [CONTRIBUTING.md], you should be able to build
 CockroachDB from source:
+继续将上面的代码添加到 pkg/sql/sem/builtins/builtins.go 中。 如果您按照 [CONTRIBUTING.md] 中的说明进行操作，您应该能够从源代码构建 CockroachDB：
 
 ```text
 ~/go/src/github.com/cockroachdb/cockroach$ make build
@@ -121,6 +133,7 @@ Failed running "sql"
 Yay! We successfully added our built-in function and it failed to execute. Note
 that the error message above is due to our implementation. If we try to execute
 a non-existent function we’d get a different error:
+耶！ 我们成功添加了内置函数，但它无法执行。 请注意，上面的错误消息是由于我们的实现造成的。 如果我们尝试执行一个不存在的函数，我们会得到一个不同的错误：
 
 ```go
 $ ./cockroach sql --insecure -e 'select nonexistent()'
@@ -129,6 +142,7 @@ Failed running "sql"
 ```
 
 Our built-in is going to map usernames to real names. For that we’ll need a map:
+我们的内置将把用户名映射到真实姓名。 为此，我们需要一张地图：
 
 ```go
 users := map[string]string{
@@ -140,6 +154,7 @@ users := map[string]string{
 
 We’ll need to loop over the arguments to the function and look up the
 corresponding real names:
+我们需要遍历函数的参数并查找相应的真实姓名：
 
 ```go
 var buf bytes.Buffer
@@ -171,6 +186,7 @@ execution engine has its own typing system. Each type in the system adheres to
 the ``Datum`` interface which defines the methods that a type needs to
 implement. ``DString`` is the implementation of ``Datum`` for the SQL ``string``
 type.
+上面的大部分看起来像标准的 Go，但什么是“DString”？ SQL 执行引擎有自己的类型系统。 系统中的每个类型都遵循“Datum”接口，该接口定义了一个类型需要实现的方法。 ``DString`` 是 SQL ``string`` 类型的 ``Datum`` 的实现。
 
 ```go
 type DString string

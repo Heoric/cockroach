@@ -355,6 +355,8 @@ func (i memRowFinalIterator) Close() {}
 // DiskBackedRowContainer is a ReorderableRowContainer that uses a
 // MemRowContainer to store rows and spills back to disk automatically if
 // memory usage exceeds a given budget.
+// DiskBackedRowContainer 是一个 ReorderableRowContainer，
+// 它使用 MemRowContainer 存储行并在内存使用量超过给定预算时自动溢出回磁盘。
 type DiskBackedRowContainer struct {
 	// src is the current ReorderableRowContainer that is being used to store
 	// rows. All the ReorderableRowContainer methods are redefined rather than

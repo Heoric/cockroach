@@ -247,6 +247,9 @@ const MaxVarintLen = 9
 // as 8-numBytes. If the value is positive it is encoded as
 // 8+numBytes. The encoded bytes are appended to the supplied buffer
 // and the final buffer is returned.
+// EncodeVarintAscending 使用可变长度（长度前缀）表示对 int64 值进行编码。
+// 长度被编码为单个字节。 如果要编码的值是负数，则长度被编码为 8-numBytes。
+// 如果值为正，则编码为 8+numBytes。 编码字节附加到提供的缓冲区并返回最终缓冲区。
 func EncodeVarintAscending(b []byte, v int64) []byte {
 	if v < 0 {
 		switch {

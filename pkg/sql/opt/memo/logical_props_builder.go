@@ -74,6 +74,7 @@ func (b *logicalPropsBuilder) buildScanProps(scan *ScanExpr, rel *props.Relation
 	// Side Effects
 	// ------------
 	// A Locking option is a side-effect (we don't want to elide this scan).
+	// 锁定选项是一种副作用（我们不想省略此扫描）。
 	if scan.Locking != nil {
 		rel.VolatilitySet.AddVolatile()
 	}
@@ -81,18 +82,22 @@ func (b *logicalPropsBuilder) buildScanProps(scan *ScanExpr, rel *props.Relation
 	// Output Columns
 	// --------------
 	// Scan output columns are stored in the definition.
+	// 扫描输出列存储在定义中。
 	rel.OutputCols = scan.Cols
 
 	// Not Null Columns
 	// ----------------
 	// Initialize not-NULL columns from the table schema.
+	// 从表模式中初始化非空列。
 	rel.NotNullCols = tableNotNullCols(md, scan.Table)
 	// Union not-NULL columns with not-NULL columns in the constraint.
+	// 联合非空列与约束中的非空列。
 	if scan.Constraint != nil {
 		rel.NotNullCols.UnionWith(scan.Constraint.ExtractNotNullCols(b.evalCtx))
 	}
 	// Union not-NULL columns with not-NULL columns in the partial index
 	// predicate.
+	// 联合非空列与部分索引谓词中的非空列。
 	if pred != nil {
 		rel.NotNullCols.UnionWith(b.rejectNullCols(pred))
 	}
@@ -106,6 +111,7 @@ func (b *logicalPropsBuilder) buildScanProps(scan *ScanExpr, rel *props.Relation
 	// -----------------------
 	// Check the hard limit to determine whether there is at most one row. Note
 	// that def.HardLimit = 0 indicates there is no known limit.
+	// 检查硬限制以确定是否最多有一行。 请注意，def.HardLimit = 0 表示没有已知限制。
 	if hardLimit == 1 {
 		rel.FuncDeps.MakeMax1Row(rel.OutputCols)
 	} else {
@@ -150,6 +156,7 @@ func (b *logicalPropsBuilder) buildScanProps(scan *ScanExpr, rel *props.Relation
 	// -----------
 	// Restrict cardinality based on constraint, partial index predicate, FDs,
 	// and hard limit.
+	// 基于约束、部分索引谓词、FD 和硬限制来限制基数。
 	rel.Cardinality = props.AnyCardinality
 	if scan.Constraint != nil && scan.Constraint.IsContradiction() {
 		rel.Cardinality = props.ZeroCardinality

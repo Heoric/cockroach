@@ -35,6 +35,14 @@ import (
 // joinReaderStrategy.processLookedUpRow(). The joinReaderStrategy now has rows
 // from both sides of the join, and performs the actual joining, emitting output
 // rows from pairs of joined rows.
+// joinReaderStrategy 抽象了查找行的处理。
+// joinReader 与 joinReaderStrategy 合作生成连接的行。
+// 更具体地说， joinReader 从输入端处理行，
+// 将这些行传递给 joinReaderStrategy.processLookupRows() ，
+// 后者（通常）保留它们并返回要查找的键跨度，
+// 然后 joinReader 迭代地查找这些跨度并传递 将查找到的结果行添加到
+// joinReaderStrategy.processLookedUpRow()。
+// joinReaderStrategy 现在有来自连接两侧的行，并执行实际的连接，从成对的连接行发出输出行。
 //
 // There are three implementations of joinReaderStrategy:
 // - joinReaderNoOrderingStrategy: used when the joined rows do not need to be
@@ -47,6 +55,11 @@ import (
 //   because it doesn't actually join anything - it directly emits the PK rows.
 //   The joinReaderIndexJoinStrategy is used by both ordered and unordered index
 //   joins; see comments on joinReaderIndexJoinStrategy for details.
+// joinReaderStrategy 的三种实现：
+// - joinReaderNoOrderingStrategy：当连接的行不需要按输入行顺序生成时使用。
+// - joinReaderOrderingStrategy：在需要按输入行顺序生成连接行时使用。 与之前的策略相反，这个策略需要做更多的缓冲来处理无序的查找行。
+// - joinReaderIndexJoinStrategy：在我们执行索引和表的 PK 之间的连接时使用。 这是最简单和最有效的，因为它实际上不加入任何东西——它直接发出 PK 行。
+// 有序和无序索引连接都使用 joinReaderIndexJoinStrategy； 有关详细信息，请参阅关于 joinReaderIndexJoinStrategy 的评论。
 type joinReaderStrategy interface {
 	// getLookupRowsBatchSizeHint returns the size in bytes of the batch of lookup
 	// rows.

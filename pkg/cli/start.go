@@ -347,36 +347,46 @@ func runStartJoin(cmd *cobra.Command, args []string) error {
 // storage devices ("stores") on this machine and --join as the list
 // of other active nodes used to join this node to the cockroach
 // cluster, if this is its first time connecting.
+// runStart 使用 --store 作为这台机器上的存储设备（“stores”）列表启动 cockroach 节点，
+// 并使用 --join 作为用于将此节点加入 cockroach 集群的其他活动节点的列表，如果这是它的 第一次连接。
 //
 // If the argument startSingleNode is set the replication factor
 // will be set to 1 all zone configs (see initial_sql.go).
+// 如果参数 startSingleNode 被设置复制因子将被设置为 1 所有区域配置（见 initial_sql.go）。
 func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnErr error) {
 	tBegin := timeutil.Now()
 
 	// First things first: if the user wants background processing,
 	// relinquish the terminal ASAP by forking and exiting.
+	// 首先要做的事情：如果用户想要后台处理，请尽快通过分叉和退出放弃终端。
 	//
 	// If executing in the background, the function returns ok == true in
 	// the parent process (regardless of err) and the parent exits at
 	// this point.
+	// 如果在后台执行，函数在父进程中返回ok == true（不管err），此时父进程退出。
 	if ok, err := maybeRerunBackground(); ok {
 		return err
 	}
 
 	// Change the permission mask for all created files.
+	// 更改所有已创建文件的权限掩码。
 	//
 	// We're considering everything produced by a cockroach node
 	// to potentially contain sensitive information, so it should
 	// not be world-readable.
+	// 我们正在考虑由蟑螂节点产生的所有内容都可能包含敏感信息，因此它不应该是世界可读的。
 	disableOtherPermissionBits()
 
 	// Set up the signal handlers. This also ensures that any of these
 	// signals received beyond this point do not interrupt the startup
 	// sequence until the point signals are checked below.
+	// 设置信号处理程序。 这也确保了在该点之后接收到的任何这些信号都不会中断启动序列，直到下面检查点信号为止。
 	// We want to set up signal handling before starting logging, because
 	// logging uses buffering, and we want to be able to sync
 	// the buffers in the signal handler below. If we started capturing
 	// signals later, some startup logging might be lost.
+	// 我们希望在开始记录之前设置信号处理，因为记录使用缓冲，我们希望能够在下面的信号处理程序中同步缓冲区。
+	// 如果我们稍后开始捕获信号，一些启动日志记录可能会丢失。
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, drainSignals...)
 
@@ -386,21 +396,27 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 	// that the process continues to exit with the Disk Full exit code. A
 	// flapping exit code can affect alerting, including the alerting
 	// performed within CockroachCloud.
+	// 检查磁盘是否已满并使用信息退出代码退出。 这需要在启动期间尽早发生，
+	// 在我们对文件系统执行任何写入（包括日志轮换）之前。 我们需要保证该进程继续以磁盘已满退出代码退出。
+	// 跳动退出代码会影响警报，包括在 CockroachCloud 中执行的警报。
 	if err := exitIfDiskFull(vfs.Default, serverCfg.Stores.Specs); err != nil {
 		return err
 	}
 
 	// Set up a cancellable context for the entire start command.
 	// The context will be canceled at the end.
+	// 为整个启动命令设置一个可取消的上下文。 最后将取消上下文。
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ambientCtx := serverCfg.AmbientCtx
 
 	// Annotate the context, and set up a tracing span for the start process.
+	// 注释上下文，并为启动进程设置跟踪范围。
 	//
 	// The context annotation ensures that server identifiers show up
 	// in the logging metadata as soon as they are known.
+	// 上下文注释确保服务器标识符一经知道就显示在日志记录元数据中。
 	//
 	// The tracing span is because we want any logging happening beyond
 	// this point to be accounted to this start context, including
@@ -408,6 +424,9 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 	// infrastructure below.  This span concludes when the startup
 	// goroutine started below has completed.  TODO(andrei): we don't
 	// close the span on the early returns below.
+	// 跟踪跨度是因为我们希望在这一点之后发生的任何日志记录都计入此启动上下文，
+	// 包括与下面的日志记录基础结构初始化相关的日志记录。 当下面启动的启动 goroutine 完成时，此跨度结束。
+	// TODO(andrei)：我们不会关闭下面早期回报的跨度。
 	var startupSpan *tracing.Span
 	ctx, startupSpan = ambientCtx.AnnotateCtxWithSpan(ctx, "server start")
 
@@ -417,12 +436,16 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 	// in CockroachDB may use logging, and until logging has been
 	// initialized log files will be created in $TMPDIR instead of their
 	// expected location.
+	// 我们希望尽早执行此操作，因为 CockroachDB 中的大部分代码可能会使用日志记录，
+	// 并且在日志记录被初始化之前，日志文件将在 $TMPDIR 而不是它们的预期位置中创建。
 	//
 	// This initialization uses the various configuration parameters
 	// initialized by flag handling (before runStart was called). Any
 	// additional server configuration tweaks for the startup process
 	// must be necessarily non-logging-related, as logging parameters
 	// cannot be picked up beyond this point.
+	// 此初始化使用由标志处理初始化的各种配置参数（在调用 runStart 之前）。
+	// 任何针对启动过程的额外服务器配置调整都必须与日志无关，因为此时无法获取日志参数。
 	stopper, err := setupAndInitializeLoggingAndProfiling(ctx, cmd, true /* isServerCmd */)
 	if err != nil {
 		return err
@@ -430,20 +453,25 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 
 	// If any store has something to say against a server start-up
 	// (e.g. previously detected corruption), listen to them now.
+	// 如果任何商店对服务器启动有意见（例如之前检测到的损坏），请立即听取他们的意见。
 	if err := serverCfg.Stores.PriorCriticalAlertError(); err != nil {
 		return clierror.NewError(err, exit.FatalError())
 	}
 
 	// We don't care about GRPCs fairly verbose logs in most client commands,
 	// but when actually starting a server, we enable them.
+	// 在大多数客户端命令中，我们不关心 GRPC 相当冗长的日志，但在实际启动服务器时，我们启用它们。
 	grpcutil.LowerSeverity(severity.WARNING)
 
 	// Tweak GOMAXPROCS if we're in a cgroup / container that has cpu limits set.
 	// The GO default for GOMAXPROCS is NumCPU(), however this is less
 	// than ideal if the cgroup is limited to a number lower than that.
+	// 如果我们在设置了 cpu 限制的 cgroup / 容器中，请调整 GOMAXPROCS。
+	// GOMAXPROCS 的 GO 默认值是 NumCPU()，但是如果 cgroup 被限制为低于该值的数字，这就不太理想了。
 	//
 	// TODO(bilal): various global settings have already been initialized based on
 	// GOMAXPROCS(0) by now.
+	// TODO(bilal): 目前已经基于 GOMAXPROCS(0) 初始化了各种全局设置。
 	cgroups.AdjustMaxProcs(ctx)
 
 	// Check the --join flag.
@@ -456,6 +484,7 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 
 	// Now perform additional configuration tweaks specific to the start
 	// command.
+	// 现在执行特定于启动命令的额外配置调整。
 
 	// Derive temporary/auxiliary directory specifications.
 	if serverCfg.Settings.ExternalIODir, err = initExternalIODir(ctx, serverCfg.Stores.Specs[0]); err != nil {
@@ -475,6 +504,7 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 	// Initialize the node's configuration from startup parameters.
 	// This also reads the part of the configuration that comes from
 	// environment variables.
+	// 从启动参数初始化节点的配置。 这也会读取来自环境变量的配置部分。
 	if err := serverCfg.InitNode(ctx); err != nil {
 		return errors.Wrap(err, "failed to initialize node")
 	}
@@ -483,19 +513,25 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 	// file. We had to wait after InitNode() so that all configuration
 	// environment variables, which are reported too, have been read and
 	// registered.
+	// 配置现在已准备好向用户和日志文件报告。 我们必须在 InitNode() 之后等待，
+	// 以便读取和注册也报告的所有配置环境变量。
 	reportConfiguration(ctx)
 
 	// ReadyFn will be called when the server has started listening on
 	// its network sockets, but perhaps before it has done bootstrapping
 	// and thus before Start() completes.
+	// ReadyFn 将在服务器开始侦听其网络套接字时调用，但可能在它完成引导之前调用，因此在 Start() 完成之前调用。
 	serverCfg.ReadyFn = func(waitForInit bool) {
 		// Inform the user if the network settings are suspicious. We need
 		// to do that after starting to listen because we need to know
 		// which advertise address NewServer() has decided.
+		// 如果网络设置可疑，请通知用户。 我们需要在开始监听后这样做，
+		// 因为我们需要知道 NewServer() 决定了哪个广告地址。
 		hintServerCmdFlags(ctx, cmd)
 
 		// If another process was waiting on the PID (e.g. using a FIFO),
 		// this is when we can tell them the node has started listening.
+		// 如果另一个进程正在等待 PID（例如使用 FIFO），此时我们可以告诉他们节点已开始侦听。
 		if startCtx.pidFile != "" {
 			log.Ops.Infof(ctx, "PID file: %s", startCtx.pidFile)
 			if err := ioutil.WriteFile(startCtx.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644); err != nil {
@@ -512,6 +548,10 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 		// by the network listener and will just wait/suspend until
 		// the cluster initializes, at which point it will be picked up
 		// and let the client go through, transparently.)
+		// 如果调用者已请求 URL 更新，请在服务器准备好接受 SQL 连接后执行此操作。
+		// （注意：如上所述，ReadyFn 在服务器开始侦听其套接字之后调用，
+		// 但可能在集群初始化并可以开始处理请求之前调用。这对于 SQL 客户端来说是可以的，
+		// 因为连接将被网络接受 listener 并且只会等待/挂起直到集群初始化，此时它将被拾取并让客户端透明地通过。）
 		if startCtx.listeningURLFile != "" {
 			log.Ops.Infof(ctx, "listening URL file: %s", startCtx.listeningURLFile)
 			// (Re-)compute the client connection URL. We cannot do this
@@ -551,6 +591,7 @@ func runStart(cmd *cobra.Command, args []string, startSingleNode bool) (returnEr
 
 	// DelayedBootstrapFn will be called if the bootstrap process is
 	// taking a bit long.
+	// DelayedBootstrapFn 如果引导过程花费的时间有点长，将被调用。
 	serverCfg.DelayedBootstrapFn = func() {
 		const msg = `The server appears to be unable to contact the other nodes in the cluster. Please try:
 
@@ -578,26 +619,32 @@ If problems persist, please see %s.`
 	// Run the rest of the startup process in a goroutine separate from
 	// the main goroutine to avoid preventing proper handling of signals
 	// if we get stuck on something during initialization (#10138).
+	// 在与主 goroutine 分开的 goroutine 中运行其余的启动过程，
+	// 以避免在初始化期间卡在某些地方时阻止正确处理信号 (#10138)。
 	var serverStatusMu serverStatus
 	var s *server.Server
 	errChan := make(chan error, 1)
 	go func() {
 		// Ensure that the log files see the startup messages immediately.
+		// 确保日志文件立即看到启动消息。
 		defer log.Flush()
 		// If anything goes dramatically wrong, use Go's panic/recover
 		// mechanism to intercept the panic and log the panic details to
 		// the error reporting server.
+		// 如果出现严重错误，使用 Go 的 panic/recover 机制拦截 panic 并将 panic 详细信息记录到错误报告服务器。
 		defer func() {
 			if s != nil {
 				// We only attempt to log the panic details if the server has
 				// actually been started successfully. If there's no server,
 				// we won't know enough to decide whether reporting is
 				// permitted.
+				// 如果服务器实际上已成功启动，我们只会尝试记录恐慌详细信息。 如果没有服务器，我们将无法确定是否允许报告。
 				logcrash.RecoverAndReportPanic(ctx, &s.ClusterSettings().SV)
 			}
 		}()
 		// When the start up goroutine completes, so can the start up span
 		// defined above.
+		// 当启动 goroutine 完成时，上面定义的启动 span 也会完成。
 		defer startupSpan.Finish()
 
 		// Any error beyond this point should be reported through the
@@ -607,6 +654,10 @@ If problems persist, please see %s.`
 		// this point is optimistic. To avoid any error, we capture all
 		// the error returns in a closure, and do the errChan reporting,
 		// if needed, when that function returns.
+		// 超过这一点的任何错误都应该通过上面定义的 errChan 报告。
+		// 然而，在 Go 中，代码模式“if err != nil { return err }”更为常见。
+		// 期望贡献者记住写“if err != nil { errChan <- err }”超出这一点是乐观的。
+		// 为避免任何错误，我们在闭包中捕获所有错误返回，并在该函数返回时根据需要进行 errChan 报告。
 		if err := func() error {
 			// Instantiate the server.
 			var err error
@@ -617,6 +668,7 @@ If problems persist, please see %s.`
 
 			// Have we already received a signal to terminate? If so, just
 			// stop here.
+			// 我们是否已经收到终止信号？ 如果是这样，就在这里停下来。
 			serverStatusMu.Lock()
 			draining := serverStatusMu.draining
 			serverStatusMu.Unlock()
@@ -645,6 +697,8 @@ If problems persist, please see %s.`
 			// Start up the diagnostics reporting and update check loops.
 			// We don't do this in (*server.Server).Start() because we don't
 			// want this overhead and possible interference in tests.
+			// 启动诊断报告和更新检查循环。 我们不在 (*server.Server).Start() 中执行此操作，
+			// 因为我们不希望这种开销和可能的测试干扰。
 			if !cluster.TelemetryOptOut() {
 				s.StartDiagnostics(ctx)
 			}
@@ -674,6 +728,7 @@ If problems persist, please see %s.`
 	return waitForShutdown(
 		// NB: we delay the access to s, as it is assigned
 		// asynchronously in a goroutine above.
+		// 注意：我们延迟了对 s 的访问，因为它是在上面的 goroutine 中异步分配的。
 		func() serverShutdownInterface { return s },
 		stopper, errChan, signalCh,
 		&serverStatusMu)
@@ -699,6 +754,8 @@ type serverShutdownInterface interface {
 // shutdown, either due to the server spontaneously shutting down
 // (signaled by stopper), or due to a server error (signaled on
 // errChan), by receiving a signal (signaled by signalCh).
+// waitForShutdown 让服务器异步运行并等待关闭，要么是由于服务器自发关闭（由停止器发出信号），
+// 要么是由于服务器错误（在 errChan 上发出信号），通过接收信号（由 signalCh 发出信号）。
 func waitForShutdown(
 	getS func() serverShutdownInterface,
 	stopper *stop.Stopper,

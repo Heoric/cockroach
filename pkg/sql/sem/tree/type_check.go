@@ -32,26 +32,33 @@ import (
 
 // SemaContext defines the context in which to perform semantic analysis on an
 // expression syntax tree.
+// SemaContext 定义了对表达式语法树进行 语义分析 的上下文。
 type SemaContext struct {
 	// Annotations augments the AST with extra information.
+	// 注解用额外的信息扩充了 AST。
 	Annotations Annotations
 
 	// Placeholders relates placeholder names to their type and, later, value.
+	// Placeholders 将占位符名称与它们的类型以及稍后的值相关联。
 	Placeholders PlaceholderInfo
 
 	// IVarContainer is used to resolve the types of IndexedVars.
+	// IVarContainer 用于解析 IndexedVars 的类型。
 	IVarContainer IndexedVarContainer
 
 	// SearchPath indicates where to search for unqualified function
 	// names. The path elements must be normalized via Name.Normalize()
 	// already.
+	// SearchPath 表示在哪里搜索非限定函数名。 路径元素必须已经通过 Name.Normalize() 规范化。
 	SearchPath sessiondata.SearchPath
 
 	// TypeResolver manages resolving type names into *types.T's.
+	// TypeResolver 管理将类型名称解析为 *types.T's。
 	TypeResolver TypeReferenceResolver
 
 	// TableNameResolver is used to resolve the fully qualified
 	// name of a table given its ID.
+	// TableNameResolver 用于解析给定 ID 的表的完全限定名称。
 	TableNameResolver QualifiedNameResolver
 
 	// IntervalStyleEnabled determines whether IntervalStyle is enabled.
@@ -72,25 +79,31 @@ type SemaContext struct {
 // SemaProperties is a holder for required and derived properties
 // during semantic analysis. It provides scoping semantics via its
 // Restore() method, see below.
+// SemaProperties 是语义分析期间所需属性和派生属性的持有者。
+// 它通过其 Restore() 方法提供范围语义，见下文。
 type SemaProperties struct {
 	// required constraints type checking to only accept certain kinds
 	// of expressions. See SetConstraint
+	// 需要约束类型检查以仅接受某些类型的表达式。 请参见设置约束
 	required semaRequirements
 
 	// Derived is populated during semantic analysis with properties
 	// from the expression being analyzed.  The caller is responsible
 	// for re-initializing this when needed.
+	// Derived 在语义分析期间使用正在分析的表达式的属性填充。 调用者负责在需要时重新初始化它。
 	Derived ScalarProperties
 }
 
 type semaRequirements struct {
 	// context is the name of the semantic anlysis context, for use in
 	// error messages.
+	// context 是语义分析上下文的名称，用于错误消息。
 	context string
 
 	// The various reject flags reject specific forms of scalar
 	// expressions. The default for this struct with false everywhere
 	// ensures that anything is allowed.
+	// 各种拒绝标志拒绝特定形式的标量表达式。 这个结构的默认值到处都是 false 确保允许任何事情。
 	rejectFlags SemaRejectFlags
 }
 
@@ -124,6 +137,8 @@ const (
 	// RejectNestedAggregates rejects any use of aggregates inside the
 	// argument list of another function call, which can itself be an aggregate
 	// (RejectAggregates notwithstanding).
+	// RejectNestedAggregates 拒绝在另一个函数调用的参数列表中使用聚合，
+	// 它本身可以是一个聚合（尽管有 RejectAggregates）。
 	RejectNestedAggregates
 
 	// RejectNestedWindowFunctions rejects any use of window functions inside the
@@ -140,6 +155,8 @@ const (
 	// argument list of another function call, which can itself be a SRF
 	// (RejectGenerators notwithstanding).
 	// This is used e.g. when processing the calls inside ROWS FROM.
+	// RejectNestedGenerators 拒绝在另一个函数调用的参数列表中使用 SRF，
+	// 它本身可以是 SRF（尽管有 RejectGenerators）。 这用于例如 在处理 ROWS FROM 内部的调用时。
 	RejectNestedGenerators
 
 	// RejectStableOperators rejects any stable functions or operators (including
@@ -160,6 +177,8 @@ const (
 // expression discovered during semantic analysis. The properties
 // are collected prior to simplification, so some of the properties
 // may not hold anymore by the time semantic analysis completes.
+// ScalarProperties 包含在语义分析期间发现的当前标量表达式的属性。
+// 这些属性是在简化之前收集的，因此在语义分析完成时，某些属性可能不再存在。
 type ScalarProperties struct {
 	// SeenAggregate is set to true if the expression originally
 	// contained an aggregation.
@@ -247,6 +266,8 @@ func decorateTypeCheckError(err error, format string, a ...interface{}) error {
 // TypeCheck performs type checking on the provided expression tree, returning
 // the new typed expression tree, which additionally permits evaluation and type
 // introspection globally and on each sub-tree.
+// TypeCheck 对提供的表达式树执行类型检查，返回新的类型化表达式树，
+// 它还允许在全局和每个子树上进行评估和类型自省。
 //
 // While doing so, it will fold numeric constants and bind placeholder names to
 // their inferred types in the provided context. The optional desired parameter can
@@ -254,6 +275,10 @@ func decorateTypeCheckError(err error, format string, a ...interface{}) error {
 // tree. Like with Expr.TypeCheck, it is not valid to provide a nil desired
 // type. Instead, call it with the wildcard type types.Any if no specific type is
 // desired.
+// 这样做时，它将折叠数字常量并将占位符名称绑定到提供的上下文中的推断类型。
+// 可选的 desired 参数可用于提示生成的类型化表达式树的根所需的类型。
+// 与 Expr.TypeCheck 一样，提供 nil 所需类型是无效的。
+// 相反，如果不需要特定类型，则使用通配符类型 types.Any 调用它。
 func TypeCheck(
 	ctx context.Context, expr Expr, semaCtx *SemaContext, desired *types.T,
 ) (TypedExpr, error) {
@@ -269,6 +294,8 @@ func TypeCheck(
 // an identical manner to TypeCheck. It then asserts that the resulting TypedExpr
 // has the provided return type, returning both the typed expression and an error
 // if it does not.
+// TypeCheckAndRequire 以与 TypeCheck 相同的方式对提供的表达式树执行类型检查。
+// 然后它断言生成的 TypedExpr 具有提供的返回类型，如果没有则返回类型表达式和错误。
 func TypeCheckAndRequire(
 	ctx context.Context, expr Expr, semaCtx *SemaContext, required *types.T, op string,
 ) (TypedExpr, error) {

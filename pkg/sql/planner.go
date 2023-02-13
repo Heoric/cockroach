@@ -49,6 +49,7 @@ import (
 
 // extendedEvalContext extends tree.EvalContext with fields that are needed for
 // distsql planning.
+// extendedEvalContext 使用 distsql 规划所需的字段扩展 tree.EvalContext。
 type extendedEvalContext struct {
 	tree.EvalContext
 
@@ -158,30 +159,40 @@ func (evalCtx *extendedEvalContext) QueueJob(
 // scoped to the execution of a single statement, and should not be used to
 // execute multiple statements. It is not safe to use the same planner from
 // multiple goroutines concurrently.
+// planner 是 SQL 语句执行的核心，将会话状态和数据库状态与 SQL 执行逻辑相结合。
+// 它在逻辑上仅限于执行单个语句，不应用于执行多个语句。
+// 同时使用来自多个 goroutine 的同一个 planner 是不安全的。
 //
 // planners are usually created by using the newPlanner method on a Session.
 // If one needs to be created outside of a Session, use makeInternalPlanner().
+// 规划器通常是通过在 Session 上使用 newPlanner 方法创建的。
+// 如果需要在会话之外创建，请使用 makeInternalPlanner()。
 type planner struct {
 	txn *kv.Txn
 
 	// isInternalPlanner is set to true when this planner is not bound to
 	// a SQL session.
+	// 当此计划程序未绑定到 SQL 会话时，isInternalPlanner 设置为 true。
 	isInternalPlanner bool
 
 	// Corresponding Statement for this query.
+	// 此查询的相应语句。
 	stmt Statement
 
 	instrumentation instrumentationHelper
 
 	// Contexts for different stages of planning and execution.
+	// 计划和执行的不同阶段的上下文。
 	semaCtx         tree.SemaContext
 	extendedEvalCtx extendedEvalContext
 
 	// sessionDataMutatorIterator is used to mutate the session variables. Read
 	// access to them is provided through evalCtx.
+	// sessionDataMutatorIterator 用于改变会话变量。 通过 evalCtx 提供对它们的读取访问权限。
 	sessionDataMutatorIterator *sessionDataMutatorIterator
 
 	// execCfg is used to access the server configuration for the Executor.
+	// execCfg 用于访问 Executor 的服务器配置。
 	execCfg *ExecutorConfig
 
 	preparedStatements preparedStatementsAccessor
@@ -194,9 +205,13 @@ type planner struct {
 	// accesses table/view descriptors to force reading the descriptors
 	// within the transaction. This is necessary to read descriptors
 	// from the store for:
+	// avoidLeasedDescriptors，当为真时，指示所有访问表/视图描述符的代码强制读取事务中的描述符。
+	// 这是从 store 中读取描述符所必需的：
 	// 1. Descriptors that are part of a schema change but are not
 	// modified by the schema change. (reading a table in CREATE VIEW)
+	// 作为模式更改的一部分但未被模式更改修改的描述符。 （在 CREATE VIEW 中读取表格）
 	// 2. Disable the use of the table cache in tests.
+	//  Disable the use of the table cache in tests.
 	avoidLeasedDescriptors bool
 
 	// autoCommit indicates whether the plan is allowed (but not required) to
@@ -205,9 +220,13 @@ type planner struct {
 	// autocommit may be false for implicit transactions; for example, an implicit
 	// transaction is used for all the statements sent in a batch at the same
 	// time.
+	// autoCommit 指示是否允许（但不是必需）计划将事务与其他 KV 操作一起提交。
+	// 提交 txn 可能是有益的，因为它可以启用 1PC 优化。
+	// 请注意，对于隐式事务，自动提交可能是错误的； 例如，隐式事务用于同时批量发送的所有语句。
 	//
 	// NOTE: plan node must be configured appropriately to actually perform an
 	// auto-commit. This is dependent on information from the optimizer.
+	// 注意：计划节点必须适当配置才能实际执行自动提交。 这取决于来自优化器的信息。
 	autoCommit bool
 
 	// cancelChecker is used by planNodes to check for cancellation of the associated
@@ -220,6 +239,8 @@ type planner struct {
 	// curPlan collects the properties of the current plan being prepared. This state
 	// is undefined at the beginning of the planning of each new statement, and cannot
 	// be reused for an old prepared statement after a new statement has been prepared.
+	// curPlan 收集当前正在准备的计划的属性。
+	// 这个状态在每条新语句开始规划时是未定义的，新语句准备好后不能再用于旧的准备语句。
 	curPlan planTop
 
 	// Avoid allocations by embedding commonly used objects and visitors.
@@ -230,15 +251,19 @@ type planner struct {
 	// Use a common datum allocator across all the plan nodes. This separates the
 	// plan lifetime from the lifetime of returned results allowing plan nodes to
 	// be pool allocated.
+	// 在所有计划节点中使用公共数据分配器。 这将计划生命周期与返回结果的生命周期分开，允许计划节点被池分配。
 	alloc *tree.DatumAlloc
 
 	// optPlanningCtx stores the optimizer planning context, which contains
 	// data structures that can be reused between queries (for efficiency).
+	// optPlanningCtx 存储优化器计划上下文，其中包含可以在查询之间重用（为了提高效率）的数据结构。
 	optPlanningCtx optPlanningCtx
 
 	// noticeSender allows the sending of notices.
 	// Do not use this object directly; use the BufferClientNotice() method
 	// instead.
+	// noticeSender 允许发送通知。
+	// 不要直接使用这个对象； 请改用 BufferClientNotice() 方法。
 	noticeSender noticeSender
 
 	queryCacheSession querycache.Session
@@ -247,6 +272,8 @@ type planner struct {
 	// resolution processes to disallow cross database references. In particular,
 	// the type resolution steps will disallow resolution of types that have a
 	// parentID != contextDatabaseID when it is set.
+	// contextDatabaseID 是数据库的 ID。 它在某些名称解析过程中被设置为不允许跨数据库引用。
+	// 特别是，类型解析步骤将不允许解析具有 parentID != contextDatabaseID 的类型。
 	contextDatabaseID descpb.ID
 }
 

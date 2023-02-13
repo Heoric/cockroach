@@ -18,6 +18,7 @@ import (
 
 // Resource is an interface used to abstract the specifics of tracking bytes
 // usage by different types of resources.
+// Resource 是一个接口，用于抽象跟踪不同类型资源的字节使用情况的细节。
 type Resource interface {
 	NewBudgetExceededError(requestedBytes int64, reservedBytes int64, budgetBytes int64) error
 }
@@ -37,10 +38,12 @@ func newMemoryBudgetExceededError(
 }
 
 // memoryResource is a Resource that represents memory.
+// memoryResource 是代表内存的 Resource。
 type memoryResource struct{}
 
 // MemoryResource is a utility singleton used as an argument when creating a
 // BytesMonitor to indicate that the monitor will be tracking memory usage.
+// MemoryResource 是一个实用单例，在创建 BytesMonitor 时用作参数以指示监视器将跟踪内存使用情况。
 var MemoryResource Resource = memoryResource{}
 
 // NewBudgetExceededError implements the Resource interface.
@@ -52,12 +55,14 @@ func (m memoryResource) NewBudgetExceededError(
 
 // memoryResourceWithErrorHint is a Resource that represents memory and augments
 // the "budget exceeded" error with a hint.
+// memoryResourceWithErrorHint 是一种资源，代表内存并通过提示增加“超出预算”错误。
 type memoryResourceWithErrorHint struct {
 	hint string
 }
 
 // NewMemoryResourceWithErrorHint returns a new memory Resource that augments
 // all "budget exceeded" errors with the given hint.
+// NewMemoryResourceWithErrorHint 返回一个新的内存资源，它使用给定的提示增加所有“超出预算”的错误。
 func NewMemoryResourceWithErrorHint(hint string) Resource {
 	return memoryResourceWithErrorHint{hint: hint}
 }

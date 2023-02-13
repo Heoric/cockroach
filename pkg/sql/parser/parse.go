@@ -118,6 +118,7 @@ func (p *Parser) Parse(sql string) (Statements, error) {
 
 // ParseWithInt parses a sql statement string and returns a list of
 // Statements. The INT token will result in the specified TInt type.
+// ParseWithInt 解析一个sql语句字符串并返回一个Statements列表。 INT 令牌将产生指定的 TInt 类型。
 func (p *Parser) ParseWithInt(sql string, nakedIntType *types.T) (Statements, error) {
 	return p.parseWithDepth(1, sql, nakedIntType)
 }
@@ -150,6 +151,7 @@ func (p *Parser) scanOneStmt() (sql string, tokens []sqlSymType, done bool) {
 
 	startPos := lval.pos
 	// We make the resulting token positions match the returned string.
+	// 我们使生成的标记位置与返回的字符串匹配。
 	lval.pos = 0
 	tokens = append(tokens, lval)
 	for {

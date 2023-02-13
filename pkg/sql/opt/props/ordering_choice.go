@@ -27,6 +27,9 @@ import (
 // sequence of equivalent column groups and a set of optional columns. Together,
 // these parts specify a simple pattern that can match one or more candidate
 // orderings. Here are some examples:
+// OrderingChoice 定义运算符提供或要求的一组可能的行排序。
+// OrderingChoice 由两部分组成：等效列组的有序序列和一组可选列。
+// 这些部分一起指定了一个可以匹配一个或多个候选顺序的简单模式。 这里有些例子：
 //
 //   +1                  ORDER BY a
 //   +1,-2               ORDER BY a,b DESC
@@ -40,50 +43,66 @@ import (
 // first column; rows that have the same value are then ordered by the second
 // column; rows that still have the same value are ordered by the third column,
 // and so on.
+// 排序序列中的每一列形成排序键的对应列，从最重要到最不重要。 每列都有一个排序方向，升序或降序。
+// 该关系按第一列排序； 具有相同值的行然后按第二列排序； 仍然具有相同值的行按第三列排序，依此类推。
 //
 // Sometimes multiple columns in the relation have equivalent values. The
 // OrderingChoiceColumn stores these columns in a group; any of the columns in
 // the group can be used to form the corresponding column in the sort key. The
 // equivalent group columns come from SQL expressions like:
+// 有时关系中的多个列具有相等的值。 OrderingChoiceColumn 将这些列存储在一个组中；
+// 组中的任何列都可用于形成排序键中的相应列。 等效的组列来自 SQL 表达式，例如：
 //
 //   a=b
 //
 // The optional column set contains columns that can appear anywhere (or
 // nowhere) in the ordering. Optional columns come from SQL expressions like:
+// 可选的列集包含可以出现在排序中任何地方（或任何地方）的列。 可选列来自 SQL 表达式，例如：
 //
 //   a=1
 //
 // Another case for optional columns is when we are grouping along a set of
 // columns and only care about the intra-group ordering.
+// 可选列的另一种情况是当我们沿着一组列分组并且只关心组内排序时。
 //
 // The optional columns can be interleaved anywhere in the sequence of ordering
 // columns, as they have no effect on the ordering.
+// 可选列可以在排序列中的任何位置交错，因为它们对排序没有影响。
 type OrderingChoice struct {
 	// Optional is the set of columns that can appear at any position in the
 	// ordering. Columns in Optional must not appear in the Columns sequence.
 	// In addition, if Columns is empty, then Optional must be as well.
 	// After initial construction, Optional is immutable. To update, replace
 	// with a different set containing the desired columns.
+	// 可选的是可以出现在排序中任何位置的列集。 Optional 中的列不得出现在 Columns 序列中。
+	// 此外，如果 Columns 为空，则 Optional 也必须为空。 在初始构建之后，Optional 是不可变的。
+	// 要更新，请替换为包含所需列的不同集合。
 	Optional opt.ColSet
 
 	// Columns is the sequence of equivalent column groups that can be used to
 	// form each column in the sort key. Columns must not appear in the Optional
 	// set. The array memory is owned by this struct, and should not be copied
 	// to another OrderingChoice unless both are kept immutable.
+	// Columns 是等效列组的序列，可用于形成排序键中的每一列。 列不得出现在可选集中。
+	// 数组内存归此结构所有，不应复制到另一个 OrderingChoice，除非两者都保持不可变。
 	Columns []OrderingColumnChoice
 }
 
 // OrderingColumnChoice specifies the set of columns which can form one of the
 // columns in the sort key, as well as the direction of that column (ascending
 // or descending).
+// OrderingColumnChoice 指定可以构成排序键中的列之一的列集，以及该列的方向（升序或降序）。
 type OrderingColumnChoice struct {
 	// Group is a set of equivalent columns, any of which can be used to form a
 	// column in the sort key. After initial construction, Group is immutable.
 	// To update, replace with a different set containing the desired columns.
+	// Group是一组等价的列，其中任何一个都可以用来构成排序键中的列。
+	// 初始构建后，Group 是不可变的。 要更新，请替换为包含所需列的不同集合。
 	Group opt.ColSet
 
 	// Descending is true if the sort key column is ordered from highest to
 	// lowest. Otherwise, it's ordered from lowest to highest.
+	// 如果排序键列从最高到最低排序，则降序为真。 否则，它从最低到最高排序。
 	Descending bool
 }
 
@@ -653,13 +672,19 @@ func (oc *OrderingChoice) Copy() OrderingChoice {
 // This is used to quickly check whether Simplify needs to be called without
 // requiring allocations in the common case. This logic should be changed in
 // concert with the Simplify logic.
+// 如果对 Simplify 的调用会导致对 OrderingChoice 的任何更改，则 CanSimplify 返回 true。
+// 更改包括额外的常量列、删除的组、额外的等效列或删除的非等效列。
+// 这用于快速检查是否需要调用 Simplify，而无需在常见情况下进行分配。
+// 此逻辑应与 Simplify 逻辑一起更改。
 func (oc *OrderingChoice) CanSimplify(fdset *FuncDepSet) bool {
 	if oc.Any() {
 		// Any ordering allowed, so can't simplify further.
+		// 允许任何排序，所以不能进一步简化。
 		return false
 	}
 
 	// Check whether optional columns can be added by the FD set.
+	// 检查 FD 集是否可以添加可选列。
 	optional := fdset.ComputeClosure(oc.Optional)
 	if !optional.Equals(oc.Optional) {
 		return true
@@ -697,17 +722,22 @@ func (oc *OrderingChoice) CanSimplify(fdset *FuncDepSet) bool {
 
 // Simplify uses the given FD set to streamline the orderings allowed by this
 // instance. It can both increase and decrease the number of allowed orderings:
+// Simplify 使用给定的 FD 集来简化此实例允许的排序。 它既可以增加也可以减少允许的排序数量：
 //
 //   1. Constant columns add additional optional column choices.
+// 			常量列添加额外的可选列选择。
 //
 //   2. Equivalent columns allow additional choices within an ordering column
 //      group.
+//      等效列允许在排序列组中进行其他选择。
 //
 //   3. Non-equivalent columns in an ordering column group are removed.
+//      删除排序列组中的非等效列。
 //
 //   4. If the columns in a group are functionally determined by columns from
 //      previous groups, the group can be dropped. This technique is described
 //      in the "Reduce Order" section of this paper:
+//      如果组中的列在功能上由先前组中的列确定，则可以删除该组。 此技术在本文的“降阶”部分进行了描述：
 //
 //        Simmen, David & Shekita, Eugene & Malkemus, Timothy. (1996).
 //        Fundamental Techniques for Order Optimization.
@@ -715,6 +745,7 @@ func (oc *OrderingChoice) CanSimplify(fdset *FuncDepSet) bool {
 //        https://cs.uwaterloo.ca/~gweddell/cs798/p57-simmen.pdf
 //
 // This logic should be changed in concert with the CanSimplify logic.
+// 此逻辑应根据 CanSimplify 逻辑进行更改。
 func (oc *OrderingChoice) Simplify(fdset *FuncDepSet) {
 	oc.Optional = fdset.ComputeClosure(oc.Optional)
 

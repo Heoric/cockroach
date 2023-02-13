@@ -69,6 +69,7 @@ const (
 // joinReader performs a lookup join between `input` and the specified `index`.
 // `lookupCols` specifies the input columns which will be used for the index
 // lookup.
+// joinReader 在 `input` 和指定的 `index` 之间执行查找连接。 `lookupCols` 指定将用于索引查找的输入列。
 type joinReader struct {
 	joinerBase
 	strategy joinReaderStrategy

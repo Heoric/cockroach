@@ -25,10 +25,13 @@
 # the table's indexes according to its ordering. The ScanPrivate field
 # identifies the table and index to scan, as well as the subset of columns to
 # project from it.
+# Scan 通过根据表的顺序扫描其中一个表的索引，返回包含表中每一行的结果集。
+# ScanPrivate 字段标识要扫描的表和索引，以及要从中投影的列子集。
 #
 # The scan can be constrained and/or have an internal row limit. A scan can be
 # executed either as a forward or as a reverse scan (except when it has a limit,
 # in which case the direction is fixed).
+# 扫描可以受到约束和/或具有内部行限制。 扫描可以作为正向扫描或反向扫描执行（除非有限制，在这种情况下方向是固定的）。
 [Relational]
 define Scan {
     _ ScanPrivate

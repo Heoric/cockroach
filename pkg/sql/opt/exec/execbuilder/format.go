@@ -24,11 +24,15 @@ func init() {
 // fmtInterceptor is a function suitable for memo.ScalarFmtInterceptor. It detects
 // if an expression tree contains only scalar expressions; if so, it tries to
 // execbuild them and print the SQL expressions.
+// fmtInterceptor 是一个适用于 memo.ScalarFmtInterceptor 的函数。
+// 它检测表达式树是否仅包含标量表达式； 如果是这样，它会尝试 execbuild 它们并打印 SQL 表达式。
 func fmtInterceptor(f *memo.ExprFmtCtx, scalar opt.ScalarExpr) string {
 	// An AssignmentCastExpr is built as a crdb_internal.assignment_cast
 	// function call by execbuilder. Formatting it as such would be confusing in
 	// an opt tree, because it would look like a FunctionExpr. So we print the
 	// full nodes instead.
+	// AssignmentCastExpr 由 execbuilder 构建为 crdb_internal.assignment_cast 函数调用。
+	// 像这样格式化它会在选择树中造成混淆，因为它看起来像 FunctionExpr。 所以我们打印完整的节点。
 	if !onlyScalarsWithoutAssignmentCasts(scalar) {
 		return ""
 	}

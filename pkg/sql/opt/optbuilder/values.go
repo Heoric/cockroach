@@ -44,15 +44,21 @@ func (b *Builder) buildValuesClause(
 	inScope.context = exprKindValues
 
 	// Typing a VALUES clause is not trivial; consider:
+	// 键入一个 VALUES 子句并不简单； 考虑：
 	//   VALUES (NULL), (1)
 	// We want to type the entire column as INT. For this, we must find the first
 	// expression that resolves to a definite type. Moreover, we want the NULL to
 	// be typed correctly; so once we figure out the type, we must go back and
 	// add casts as necessary. We do this column by column and store the groups in
 	// a linearized matrix.
+	// 我们想将整个列键入为 INT。 为此，我们必须找到第一个解析为确定类型的表达式。
+	// 此外，我们希望正确输入 NULL； 所以一旦我们弄清楚了类型，我们必须返回并根据需要添加转换。
+	// 我们逐列执行此操作，并将这些组存储在线性化矩阵中。
 
 	// Bulk allocate ScalarListExpr slices: we need a matrix of size numRows by
 	// numCols and one slice of length numRows for the tuples.
+	// 批量分配 ScalarListExpr 切片：我们需要一个大小为 numRows 乘以
+	// numCols 的矩阵和一个长度为 numRows 的切片用于元组。
 	elems := make(memo.ScalarListExpr, numRows*numCols+numRows)
 	tuples, elems := elems[:numRows], elems[numRows:]
 

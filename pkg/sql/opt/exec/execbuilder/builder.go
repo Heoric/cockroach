@@ -117,13 +117,19 @@ type Builder struct {
 // New constructs an instance of the execution node builder using the
 // given factory to construct nodes. The Build method will build the execution
 // node tree from the given optimized expression tree.
+// New 使用给定的工厂构造节点来构造执行节点构建器的实例。
+// Build 方法将从给定的优化表达式树构建执行节点树。
 //
 // catalog is only needed if the statement contains an EXPLAIN (OPT, CATALOG).
+// 只有在语句包含 EXPLAIN (OPT, CATALOG) 时才需要目录。
 //
 // If allowAutoCommit is true, mutation operators can pass the auto commit flag
 // to the factory (when the optimizer determines it is correct to do so and
 // `transaction_rows_read_err` guardrail is disabled.). It should be false if
 // the statement is executed as part of an explicit transaction.
+// 如果 allowAutoCommit 为真，突变操作符可以将自动提交标志传递给工厂
+//（当优化器确定这样做是正确的并且禁用了 `transaction_rows_read_err` 护栏时。）。
+// 如果该语句作为显式事务的一部分执行，则它应该为 false。
 func New(
 	factory exec.Factory,
 	optimizer *xform.Optimizer,
@@ -150,6 +156,7 @@ func New(
 		}
 		// If we have the limits on the number of rows read by a single txn, we
 		// cannot auto commit if the query is not internal.
+		// 如果我们对单个 txn 读取的行数有限制，如果查询不是内部的，我们就不能自动提交。
 		//
 		// Note that we don't impose such a requirement on the number of rows
 		// written by a single txn because Builder.canAutoCommit ensures that we
@@ -157,6 +164,9 @@ func New(
 		// in such a scenario tableWriterBase.finalize is responsible for making
 		// sure that the rows written limit is not reached before the auto
 		// commit.
+		// 请注意，我们不会对单个 txn 写入的行数施加这样的要求，因为 Builder.canAutoCommit
+		// 确保我们尝试自动提交，前提是查询中存在单个突变，并且在这种情况下 tableWriterBase。
+		// finalize 负责确保在自动提交之前未达到行写入限制。
 		prohibitAutoCommit := sd.TxnRowsReadErr != 0 && !sd.Internal
 		b.allowAutoCommit = b.allowAutoCommit && !prohibitAutoCommit
 		b.initialAllowAutoCommit = b.allowAutoCommit
@@ -167,6 +177,7 @@ func New(
 
 // Build constructs the execution node tree and returns its root node if no
 // error occurred.
+// Build 构造执行节点树，如果没有发生错误则返回其根节点。
 func (b *Builder) Build() (_ exec.Plan, err error) {
 	plan, err := b.build(b.e)
 	if err != nil {
@@ -206,6 +217,8 @@ func (b *Builder) build(e opt.Expr) (_ execPlan, err error) {
 	//  - there are no other mutations in the statement, and the output of the
 	//    insert is not processed through side-effecting expressions (i.e. we can
 	//    auto-commit).
+	// 来自 ConstructFastPathInsert 的第一个条件：
+	// - 语句中没有其他突变，插入的输出不通过副作用表达式处理（即我们可以自动提交）。
 	b.allowInsertFastPath = b.allowInsertFastPath && canAutoCommit
 
 	return b.buildRelational(rel)

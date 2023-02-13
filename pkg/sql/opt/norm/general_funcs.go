@@ -25,6 +25,7 @@ import (
 
 // CustomFuncs contains all the custom match and replace functions used by
 // the normalization rules. These are also imported and used by the explorer.
+// CustomFuncs 包含规范化规则使用的所有自定义匹配和替换函数。 这些也被 explorer 导入和使用。
 type CustomFuncs struct {
 	f   *Factory
 	mem *memo.Memo

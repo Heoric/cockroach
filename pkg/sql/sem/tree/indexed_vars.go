@@ -22,6 +22,7 @@ import (
 
 // IndexedVarContainer provides the implementation of TypeCheck, Eval, and
 // String for IndexedVars.
+// IndexedVarContainer 为 IndexedVars 提供了 TypeCheck、Eval 和 String 的实现。
 type IndexedVarContainer interface {
 	IndexedVarEval(idx int, ctx *EvalContext) (Datum, error)
 	IndexedVarResolvedType(idx int) *types.T
@@ -35,6 +36,8 @@ type IndexedVarContainer interface {
 // IndexedVar is a VariableExpr that can be used as a leaf in expressions; it
 // represents a dynamic value. It defers calls to TypeCheck, Eval, String to an
 // IndexedVarContainer.
+// IndexedVar 是一个 VariableExpr，可以用作表达式中的叶子； 它代表一个动态值。
+// 它将对 TypeCheck、Eval、String 的调用推迟到 IndexedVarContainer。
 type IndexedVar struct {
 	Idx  int
 	Used bool
@@ -116,9 +119,11 @@ func NewTypedOrdinalReference(r int, typ *types.T) *IndexedVar {
 
 // IndexedVarHelper wraps an IndexedVarContainer (an interface) and creates
 // IndexedVars bound to that container.
+// IndexedVarHelper 包装一个 IndexedVarContainer（一个接口）并创建绑定到该容器的 IndexedVars。
 //
 // It also keeps track of which indexes from the container are used by
 // expressions.
+// 它还跟踪容器中的哪些索引被表达式使用。
 type IndexedVarHelper struct {
 	vars      []IndexedVar
 	container IndexedVarContainer
@@ -134,10 +139,16 @@ func (h *IndexedVarHelper) Container() IndexedVarContainer {
 // - for already bound IndexedVar, bound to this container, this will return the same ivar unchanged.
 // - for ordinal references (with an explicit unboundContainer) this will return a new var.
 // - for already bound IndexedVars, bound to another container, this will error out.
+// BindIfUnbound 确保 IndexedVar 附加到此助手的容器。
+// - 对于新创建的 IndexedVars（带有 nil 容器），这将就地绑定。
+// - 对于已经绑定到此容器的 IndexedVar，这将返回相同的 ivar 不变。
+// - 对于序号引用（带有显式 unboundContainer）这将返回一个新的 var。
+// - 对于已经绑定的 IndexedVars，绑定到另一个容器，这将出错。
 func (h *IndexedVarHelper) BindIfUnbound(ivar *IndexedVar) (*IndexedVar, error) {
 	// We perform the range check always, even if the ivar is already
 	// bound, as a form of safety assertion against misreuse of ivars
 	// across containers.
+	// 我们始终执行范围检查，即使 ivar 已经绑定，作为一种安全断言形式，防止跨容器滥用 ivar。
 	if ivar.Idx < 0 || ivar.Idx >= len(h.vars) {
 		return ivar, pgerror.Newf(
 			pgcode.UndefinedColumn, "invalid column ordinal: @%d", ivar.Idx+1)

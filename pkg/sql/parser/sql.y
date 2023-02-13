@@ -9956,9 +9956,11 @@ drop_owned_by_stmt:
 | DROP OWNED BY error // SHOW HELP: DROP OWNED BY
 
 // A complete SELECT statement looks like this.
+// 完整的 SELECT 语句如下所示。
 //
 // The rule returns either a single select_stmt node or a tree of them,
 // representing a set-operation tree.
+// 该规则返回单个 select_stmt 节点或它们的树，表示集合操作树。
 //
 // There is an ambiguity when a sub-SELECT is within an a_expr and there are
 // excess parentheses: do the parentheses belong to the sub-SELECT or to the
@@ -9972,6 +9974,13 @@ drop_owned_by_stmt:
 // "SELECT (((SELECT 2)) UNION SELECT 2)". Had we parsed "((SELECT 2))" as an
 // a_expr, it'd be too late to go back to the SELECT viewpoint when we see the
 // UNION.
+// 当 sub-SELECT 在 a_expr 中并且有多余的括号时会产生歧义：
+// 括号是属于 sub-SELECT 还是属于周围的 a_expr？ 我们真的不在乎，但 bison 想知道。
+// 为了解决歧义，我们小心地定义语法，以便尽可能长时间地推迟决定：
+// 只要我们能够继续将括号吸收到 sub-SELECT 中，我们就会这样做，并且只有在它不再可能时才会这样做
+// 为此，我们将决定 parens 属于表达式。 例如，在“SELECT (((SELECT 2)) + 3)”中，
+// 额外的括号被视为 sub-select 的一部分。 “SELECT (((SELECT 2)) UNION SELECT 2)”显示了这样做的必要性。
+// 如果我们将“((SELECT 2))”解析为 a_expr，那么当我们看到 UNION 时再回到 SELECT 观点就太晚了。
 //
 // This approach is implemented by defining a nonterminal select_with_parens,
 // which represents a SELECT with at least one outer layer of parentheses, and
@@ -9984,10 +9993,21 @@ drop_owned_by_stmt:
 // reduce to select_with_parens) rather than trying to reduce the inner
 // <select> nonterminal to something else. We use UMINUS precedence for this,
 // which is a fairly arbitrary choice.
+// 这种方式是通过定义一个非终结符select_with_parens来实现的，
+// 它代表一个至少有一层外层括号的SELECT，并且在表达式语法中注意使用select_with_parens，
+// 千万不要使用'('select_stmt')'。 然后我们将有 shift-reduce 冲突，我们可以解决这些冲突，
+// 以支持始终将 '(' <select> ')' 视为 select_with_parens。
+// 为了解决冲突，与 select_with_parens 产生式冲突的产生式被手动赋予低于 ')'
+// 优先级的优先级，从而确保我们移动 ')'（然后减少到 select_with_parens）
+// 而不是试图减少内部 <select > 非终结点到别的东西。 我们为此使用 UMINUS 优先级，
+// 这是一个相当随意的选择。
 //
 // To be able to define select_with_parens itself without ambiguity, we need a
 // nonterminal select_no_parens that represents a SELECT structure with no
 // outermost parentheses. This is a little bit tedious, but it works.
+// 为了能够毫无歧义地定义 select_with_parens 本身，
+// 我们需要一个非终结符 select_no_parens 来表示没有最外层括号的 SELECT 结构。
+// 这有点乏味，但它确实有效。
 //
 // In non-expression contexts, we use select_stmt which can represent a SELECT
 // with or without outer parentheses.

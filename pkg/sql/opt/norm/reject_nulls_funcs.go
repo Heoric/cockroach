@@ -27,6 +27,8 @@ func (c *CustomFuncs) RejectNullCols(in memo.RelExpr) opt.ColSet {
 // HasNullRejectingFilter returns true if the filter causes some of the columns
 // in nullRejectCols to be non-null. For example, if nullRejectCols = (x, z),
 // filters such as x < 5, x = y, and z IS NOT NULL all satisfy this property.
+// 如果过滤器导致 nullRejectCols 中的某些列为非空，则 HasNullRejectingFilter 返回 true。
+// 例如，如果 nullRejectCols = (x, z)，则 x < 5、x = y 和 z IS NOT NULL 等过滤器都满足此属性。
 func (c *CustomFuncs) HasNullRejectingFilter(
 	filters memo.FiltersExpr, nullRejectCols opt.ColSet,
 ) bool {

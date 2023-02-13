@@ -26,17 +26,24 @@ import (
 // required physical properties. The optimizer uses this to determine whether an
 // expression provides a required physical property. If it does not, then the
 // optimizer inserts an enforcer operator that is able to provide it.
+// 如果给定表达式可以提供所需的物理属性，则 CanProvidePhysicalProps 返回 true。
+// 优化器使用它来确定表达式是否提供所需的物理属性。
+// 如果没有，那么优化器会插入一个能够提供它的执行器运算符。
 //
 // Some operators, like Select and Project, may not directly provide a required
 // physical property, but do "pass through" the requirement to their input.
 // Operators that do this should return true from the appropriate canProvide
 // method and then pass through that property in the buildChildPhysicalProps
 // method.
+// 某些运算符，如 Select 和 Project，可能不会直接提供所需的物理属性，但会将要求“传递”到它们的输入中。
+// 执行此操作的运算符应从适当的 canProvide 方法返回 true，然后在 buildChildPhysicalProps
+// 方法中传递该属性。
 func CanProvidePhysicalProps(
 	evalCtx *tree.EvalContext, e memo.RelExpr, required *physical.Required,
 ) bool {
 	// All operators can provide the Presentation and LimitHint properties, so no
 	// need to check for that.
+	// 所有操作符都可以提供 Presentation 和 LimitHint 属性，因此无需检查。
 	canProvideOrdering := e.Op() == opt.SortOp || ordering.CanProvide(e, &required.Ordering)
 	canProvideDistribution := e.Op() == opt.DistributeOp || distribution.CanProvide(evalCtx, e, &required.Distribution)
 	return canProvideOrdering && canProvideDistribution

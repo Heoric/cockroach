@@ -36,6 +36,10 @@ import (
 // memo group that contains other logically equivalent expressions. Expressions
 // in the same memo group are linked together in a list that can be traversed
 // via calls to FirstExpr and NextExpr:
+// RelExpr 由所有标记为 Relational 的运算符实现。
+// 关系表达式具有一组描述其行为和结果的内容和特征的逻辑属性。
+// 它们存储为包含其他逻辑等效表达式的备忘录组的一部分。
+// 同一个备忘录组中的表达式在一个列表中链接在一起，可以通过调用 FirstExpr 和 NextExpr 遍历该列表：
 //
 //      +--------------------------------------+
 //      |  +---------------+                   |

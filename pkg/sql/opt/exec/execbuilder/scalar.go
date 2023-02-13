@@ -28,6 +28,8 @@ type buildScalarCtx struct {
 
 	// ivarMap is a map from opt.ColumnID to the index of an IndexedVar.
 	// If a ColumnID is not in the map, it cannot appear in the expression.
+	// ivarMap 是从 opt.ColumnID 到 IndexedVar 的索引的映射。
+	// 如果 ColumnID 不在映射中，则它不能出现在表达式中。
 	ivarMap opt.ColMap
 }
 

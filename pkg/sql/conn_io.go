@@ -345,8 +345,10 @@ var _ Command = CopyIn{}
 
 // DrainRequest represents a notice that the server is draining and command
 // processing should stop soon.
+// DrainRequest 表示服务器正在耗尽并且命令处理应该很快停止的通知。
 //
 // DrainRequest commands don't produce results.
+// DrainRequest 命令不产生结果。
 type DrainRequest struct{}
 
 // command implements the Command interface.
@@ -582,22 +584,27 @@ const (
 // ClientComm is the interface used by the connExecutor for creating results to
 // be communicated to client and for exerting some control over this
 // communication.
+// ClientComm 是 connExecutor 使用的接口，用于创建要传达给客户端的结果并对该通信施加一些控制。
 //
 // ClientComm is implemented by the pgwire connection.
 type ClientComm interface {
-	// createStatementResult creates a StatementResult for stmt.
+	// CreateStatementResult creates a StatementResult for stmt.
 	//
 	// descOpt specifies if result needs to inform the client about row schema. If
 	// it doesn't, a SetColumns call becomes a no-op.
+	// descOpt 指定结果是否需要通知客户端有关行架构的信息。 如果不是，则 SetColumns 调用变为空操作。
 	//
 	// pos is the stmt's position within the connection and is used to enforce
 	// that results are created in order and also to discard results through
 	// ClientLock.rtrim(pos).
+	// pos 是 stmt 在连接中的位置，用于强制按顺序创建结果，并通过 ClientLock.rtrim(pos) 丢弃结果。
 	//
 	// formatCodes describe how each column in the result rows is to be encoded.
 	// It should be nil if statement type != Rows. Otherwise, it can be nil, in
 	// which case every column will be encoded using the text encoding, otherwise
 	// it needs to contain a value for every column.
+	// formatCodes 描述如何对结果行中的每一列进行编码。 如果语句类型 != Rows，它应该是 nil。
+	// 否则，它可以为 nil，在这种情况下，每一列都将使用文本编码进行编码，否则它需要为每一列包含一个值。
 	CreateStatementResult(
 		stmt tree.Statement,
 		descOpt RowDescOpt,
@@ -631,14 +638,17 @@ type ClientComm interface {
 	// CreateDrainResult creates a result for a Drain command.
 	CreateDrainResult(pos CmdPos) DrainResult
 
-	// lockCommunication ensures that no further results are delivered to the
+	// LockCommunication ensures that no further results are delivered to the
 	// client. The returned ClientLock can be queried to see what results have
 	// been already delivered to the client and to discard results that haven't
 	// been delivered.
+	// LockCommunication 确保没有进一步的结果传递给客户端。
+	// 可以查询返回的 ClientLock 以查看哪些结果已交付给客户端并丢弃尚未交付的结果。
 	//
 	// ClientLock.Close() needs to be called on the returned lock once
 	// communication can be unlocked (i.e. results can be delivered to the client
 	// again).
+	// ClientLock.Close() 需要在返回的锁上调用，一旦通信可以解锁（即结果可以再次传递给客户端）。
 	LockCommunication() ClientLock
 
 	// Flush delivers all the previous results to the client. The results might
@@ -699,6 +709,8 @@ type CommandResultClose interface {
 
 // RestrictedCommandResult is a subset of CommandResult meant to make it clear
 // that its clients don't close the CommandResult.
+// RestrictedCommandResult 是 CommandResult 的一个子集，
+// 旨在明确其客户端不会关闭 CommandResult。
 type RestrictedCommandResult interface {
 	CommandResultErrBase
 
@@ -751,6 +763,9 @@ type RestrictedCommandResult interface {
 	// the results accumulated so far, and all subsequent rows added
 	// to this CommandResult, will be flushed immediately to the client.
 	// This is currently used for sinkless changefeeds.
+	// 可以在执行期间调用 DisableBuffering 以确保到目前为止累积的结果以及添加到此
+	// CommandResult 的所有后续行将立即刷新到客户端。
+	// 这目前用于 sinkless changefeeds。
 	DisableBuffering()
 }
 
@@ -828,6 +843,9 @@ type CopyInResult interface {
 // lock is used, no more results are delivered. The lock itself can be used to
 // query what results have already been delivered and to discard results that
 // haven't been delivered.
+// ClientLock是ClientComm.lockCommunication()返回的接口。
+// 它表示对向 SQL 客户端交付结果的锁定。 当使用这样的锁时，不会传递更多结果。
+// 锁本身可用于查询已交付的结果以及丢弃未交付的结果。
 type ClientLock interface {
 	// Close unlocks the ClientComm from whence this ClientLock came from. After
 	// Close is called, buffered results may again be sent to the client,
@@ -851,9 +869,13 @@ type ClientLock interface {
 // rewindCapability is used pass rewinding instructions in between different
 // layers of the connExecutor state machine. It ties together a position to
 // which we want to rewind within the stream of commands with:
+// rewindCapability 用于在 connExecutor 状态机的不同层之间传递倒带指令。
+// 它将我们想要在命令流中倒带的位置与以下内容联系在一起：
 // a) a ClientLock that guarantees that the rewind to the respective position is
 // (and remains) possible.
+// 一个 ClientLock，它保证可以（并且仍然）可以倒带到相应的位置。
 // b) the StmtBuf that needs to be rewound at the same time as the results.
+// 需要与结果同时倒带的 StmtBuf。
 //
 // rewindAndUnlock() needs to be called eventually in order to actually perform
 // the rewinding and unlock the respective ClientComm.

@@ -397,6 +397,8 @@ type DistSenderConfig struct {
 // Cockroach cluster via the supplied gossip instance. Supplying a
 // DistSenderContext or the fields within is optional. For omitted values, sane
 // defaults will be used.
+// NewDistSender 返回一个 batch.Sender 实例，它通过提供的八卦实例连接到 Cockroach 集群。
+// 提供 DistSenderContext 或其中的字段是可选的。 对于省略的值，将使用合理的默认值。
 func NewDistSender(cfg DistSenderConfig) *DistSender {
 	ds := &DistSender{
 		st:            cfg.Settings,

@@ -17,6 +17,7 @@ import (
 )
 
 // ColSet efficiently stores an unordered set of column ids.
+// ColSet 有效地存储一组无序的列 ID。
 type ColSet struct {
 	set util.FastIntSet
 }
@@ -26,20 +27,26 @@ type ColSet struct {
 // of [0, 63]. ColumnID 0 is reserved as an unknown ColumnID, and a ColSet
 // should never contain it, so this shift allows us to make use of the set
 // fast-path in a few more cases.
+// 我们将底层 FastIntSet 中的 ColumnID 偏移 1，以便内部设置的快速路径可用于 [1, 64]
+// 范围内的 ColumnID，而不是 [0, 63]。 ColumnID 0 被保留为未知的 ColumnID，
+// ColSet 永远不应包含它，因此这种转变允许我们在更多情况下使用设置的快速路径。
 const offset = 1
 
 // setVal returns the value to store in the internal set for the given ColumnID.
+// setVal 返回要存储在给定 ColumnID 的内部集中的值。
 func setVal(col ColumnID) int {
 	return int(col - offset)
 }
 
 // retVal returns the ColumnID to return for the given value in the internal
 // set.
+// retVal 返回 ColumnID 以返回内部集合中的给定值。
 func retVal(i int) ColumnID {
 	return ColumnID(i + offset)
 }
 
 // MakeColSet returns a set initialized with the given values.
+// MakeColSet 返回一个用给定值初始化的集合。
 func MakeColSet(vals ...ColumnID) ColSet {
 	var res ColSet
 	for _, v := range vals {
@@ -49,6 +56,7 @@ func MakeColSet(vals ...ColumnID) ColSet {
 }
 
 // Add adds a column to the set. No-op if the column is already in the set.
+// 添加向集合中添加一列。 如果该列已经在集合中，则无操作。
 func (s *ColSet) Add(col ColumnID) {
 	if col <= 0 {
 		panic(errors.AssertionFailedf("col must be greater than 0"))
@@ -57,9 +65,11 @@ func (s *ColSet) Add(col ColumnID) {
 }
 
 // Remove removes a column from the set. No-op if the column is not in the set.
+// Remove 从集合中删除一列。 如果该列不在集合中，则无操作。
 func (s *ColSet) Remove(col ColumnID) { s.set.Remove(setVal(col)) }
 
 // Contains returns true if the set contains the column.
+// 如果集合包含该列，则包含返回 true。
 func (s ColSet) Contains(col ColumnID) bool { return s.set.Contains(setVal(col)) }
 
 // Empty returns true if the set is empty.
@@ -70,6 +80,7 @@ func (s ColSet) Len() int { return s.set.Len() }
 
 // Next returns the first value in the set which is >= startVal. If there is no
 // such column, the second return value is false.
+// Next 返回集合中第一个 >= startVal 的值。 如果没有这样的列，则第二个返回值为 false。
 func (s ColSet) Next(startVal ColumnID) (ColumnID, bool) {
 	c, ok := s.set.Next(setVal(startVal))
 	return retVal(c), ok

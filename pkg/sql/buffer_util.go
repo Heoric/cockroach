@@ -27,6 +27,8 @@ import (
 // rowContainerHelper is a wrapper around a disk-backed row container that
 // should be used by planNodes (or similar components) whenever they need to
 // buffer data. init or initWithDedup must be called before the first use.
+// rowContainerHelper 是磁盘支持的行容器的包装器，计划节点（或类似组件）在需要缓冲数据时应该使用它。
+// init 或 initWithDedup 必须在首次使用前调用。
 type rowContainerHelper struct {
 	memMonitor  *mon.BytesMonitor
 	diskMonitor *mon.BytesMonitor
@@ -115,6 +117,8 @@ func (c *rowContainerHelper) Len() int {
 // Clear prepares the helper for reuse (it resets the underlying container which
 // will delete all buffered data; also, the container will be using the
 // in-memory variant even if it spilled on the previous usage).
+// Clear 准备帮助器以供重用（它重置底层容器，这将删除所有缓冲数据；
+// 此外，容器将使用内存中的变体，即使它溢出了之前的使用）。
 func (c *rowContainerHelper) Clear(ctx context.Context) error {
 	return c.rows.UnsafeReset(ctx)
 }

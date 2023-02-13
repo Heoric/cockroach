@@ -54,6 +54,8 @@ type FunctionProperties struct {
 	// NullableArgs is set to true when a function's definition can handle NULL
 	// arguments. When set to true, the function will be given the chance to see NULL
 	// arguments.
+	// 当函数的定义可以处理 NULL 参数时，NullableArgs 设置为 true。
+	// 当设置为 true 时，函数将有机会看到 NULL 参数。
 	//
 	// When set to false, the function will directly result in NULL in the
 	// presence of any NULL arguments without evaluating the function's
@@ -62,6 +64,11 @@ type FunctionProperties struct {
 	// be true. Note that if this behavior changes so that NullableArgs=false
 	// functions can produce side-effects, the FoldFunctionWithNullArg optimizer
 	// rule must be changed to avoid folding those functions.
+	// 当设置为 false 时，函数将在存在任何 NULL 参数的情况下直接导致 NULL，
+	// 而不评估 Overload.Fn 中定义的函数的实现。
+	// 因此，如果预期函数会产生带有 NULL 参数的副作用，则 NullableArgs 必须为真。
+	// 请注意，如果此行为发生变化以致 NullableArgs=false 函数可以产生副作用，
+	// 则必须更改 FoldFunctionWithNullArg 优化器规则以避免折叠这些函数。
 	//
 	// NOTE: when set, a function should be prepared for any of its arguments to
 	// be NULL and should act accordingly.
@@ -72,9 +79,13 @@ type FunctionProperties struct {
 	// (e.g. planner). Currently used for DistSQL to determine if
 	// expressions can be evaluated on a different node without sending
 	// over the EvalContext.
+	// 当一个函数依赖于未被 DistSQL 编组的 EvalContext 成员（例如 planner）时，
+	// DistsqlBlocklist 设置为 true。
+	// 当前用于 DistSQL 以确定是否可以在不同节点上评估表达式而无需通过 EvalContext 发送。
 	//
 	// TODO(andrei): Get rid of the planner from the EvalContext and then we can
 	// get rid of this blocklist.
+	// 从 EvalContext 中去掉 planner，然后我们就可以去掉这个 blocklist。
 	DistsqlBlocklist bool
 
 	// Class is the kind of built-in function (normal/aggregate/window/etc.)
@@ -85,17 +96,22 @@ type FunctionProperties struct {
 
 	// AvailableOnPublicSchema indicates whether the function can be resolved
 	// if it is found on the public schema.
+	// AvailableOnPublicSchema 指示如果在公共模式中找到该函数，是否可以解析该函数。
 	AvailableOnPublicSchema bool
 
 	// ReturnLabels can be used to override the return column name of a
 	// function in a FROM clause.
 	// This satisfies a Postgres quirk where some json functions have
 	// different return labels when used in SELECT or FROM clause.
+	// ReturnLabels 可用于覆盖 FROM 子句中函数的返回列名称。
+	// 这满足了 Postgres 的一个怪癖，其中一些 json 函数在 SELECT 或 FROM 子句中使用时具有不同的返回标签。
 	ReturnLabels []string
 
 	// AmbiguousReturnType is true if the builtin's return type can't be
 	// determined without extra context. This is used for formatting builtins
 	// with the FmtParsable directive.
+	// 如果在没有额外上下文的情况下无法确定内置函数的返回类型，则 AmbiguousReturnType 为真。
+	// 这用于使用 FmtParsable 指令格式化内置函数。
 	AmbiguousReturnType bool
 
 	// HasSequenceArguments is true if the builtin function takes in a sequence
@@ -103,6 +119,9 @@ type FunctionProperties struct {
 	// TODO(richardjcai): When implicit casting is supported, these builtins
 	// should take RegClass as the arg type for the sequence name instead of
 	// string, we will add a dependency on all RegClass types used in a view.
+	// 如果内置函数采用序列名称（字符串）并且可以在标量表达式中使用，则 HasSequenceArguments 为真。
+	// 当支持隐式转换时，这些内置函数应该将 RegClass 作为序列名称的 arg 类型而不是字符串，
+	// 我们将添加对视图中使用的所有 RegClass 类型的依赖。
 	HasSequenceArguments bool
 
 	// CompositeInsensitive indicates that this function returns equal results
@@ -110,6 +129,9 @@ type FunctionProperties struct {
 	// composite types which can be equal but not identical
 	// (e.g. decimals 1.0 and 1.00). For example, converting a decimal to string
 	// is not CompositeInsensitive.
+	// CompositeInsensitive 表示此函数在对相等输入进行评估时返回相等结果。
+	// 对于可以相等但不相同的复合类型（例如小数 1.0 和 1.00），这是一个重要的属性。
+	// 例如，将小数转换为字符串不是 CompositeInsensitive。
 	//
 	// See memo.CanBeCompositeSensitive.
 	CompositeInsensitive bool

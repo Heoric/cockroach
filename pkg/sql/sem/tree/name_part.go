@@ -72,16 +72,23 @@ func (n Name) Normalize() string {
 
 // An UnrestrictedName is a Name that does not need to be escaped when it
 // matches a reserved keyword.
+// Unrestricted Name 是匹配保留关键字时不需要转义的Name。
 //
 // In general, an UnrestrictedName is the result of parsing an unrestricted_name
 // nonterminal, which is used in the grammar where reserved keywords can be
 // unambiguously interpreted as identifiers. When formatted, an UnrestrictedName
 // that matches a reserved keyword thus does not need to be quoted.
+// 通常，UnrestrictedName 是解析 unrestricted_name 非终结符的结果，
+// 它用于保留关键字可以明确解释为标识符的语法中。
+// 因此，格式化时，不需要引用与保留关键字匹配的 UnrestrictedName。
 //
 // For historical reasons, some unrestricted_name nonterminals are instead
 // parsed as Names. The only user-visible impact of this is that we are too
 // aggressive about quoting names in certain positions. New grammar rules should
 // prefer to parse unrestricted_name nonterminals into UnrestrictedNames.
+// 由于历史原因，一些 unrestricted_name 非终结符被解析为名称。
+// 唯一用户可见的影响是我们在某些位置引用名称时过于激进。
+// 新的语法规则应该倾向于将 unrestricted_name 非终结符解析为 UnrestrictedNames。
 type UnrestrictedName string
 
 // Format implements the NodeFormatter interface.

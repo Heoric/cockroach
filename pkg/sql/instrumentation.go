@@ -54,10 +54,13 @@ var collectTxnStatsSampleRate = settings.RegisterFloatSetting(
 
 // instrumentationHelper encapsulates the logic around extracting information
 // about the execution of a statement, like bundles and traces. Typical usage:
+// instrumentationHelper 封装了有关提取有关语句执行的信息的逻辑，例如捆绑包和跟踪。 典型用法：
 //
 //  - SetOutputMode() can be used as necessary if we are running an EXPLAIN
 //    ANALYZE variant.
+// SetOutputMode() can be used as necessary if we are running an EXPLAIN ANALYZE variant.
 //
+//  - Setup() is called before query execution.
 //  - Setup() is called before query execution.
 //
 //  - SetDiscardRows(), ShouldDiscardRows(), ShouldSaveFlows(),
@@ -81,10 +84,12 @@ type instrumentationHelper struct {
 
 	// collectBundle is set when we are collecting a diagnostics bundle for a
 	// statement; it triggers saving of extra information like the plan string.
+	// 当我们为一条语句收集诊断包时设置 collectBundle； 它会触发保存计划字符串等额外信息。
 	collectBundle bool
 
 	// collectExecStats is set when we are collecting execution statistics for a
 	// statement.
+	// collectExecStats 在我们收集语句的执行统计信息时设置。
 	collectExecStats bool
 
 	// discardRows is set if we want to discard any results rather than sending
@@ -132,6 +137,7 @@ type instrumentationHelper struct {
 
 // outputMode indicates how the statement output needs to be populated (for
 // EXPLAIN ANALYZE variants).
+// outputMode 指示需要如何填充语句输出（对于 EXPLAIN ANALYZE 变体）。
 type outputMode int8
 
 const (
@@ -152,6 +158,8 @@ func (ih *instrumentationHelper) SetOutputMode(outputMode outputMode, explainFla
 // output mode or statement diagnostic activation requests. Finish() must be
 // called after the statement finishes execution (unless needFinish=false, in
 // which case Finish() is a no-op).
+// 安装程序可能会启用语句的详细跟踪，具体取决于输出模式或语句诊断激活请求。
+// 必须在语句完成执行后调用 Finish()（除非 needFinish=false，在这种情况下 Finish() 是空操作）。
 func (ih *instrumentationHelper) Setup(
 	ctx context.Context,
 	cfg *ExecutorConfig,

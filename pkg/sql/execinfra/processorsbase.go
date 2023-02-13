@@ -34,17 +34,21 @@ import (
 
 // Processor is a common interface implemented by all processors, used by the
 // higher-level flow orchestration code.
+// Processor是所有 processors 实现的通用接口，供上层 flow 程编排代码使用。
 type Processor interface {
 	// OutputTypes returns the column types of the results (that are to be fed
 	// through an output router).
+	// OutputTypes 返回结果的列类型（将通过输出路由器提供）。
 	OutputTypes() []*types.T
 
 	// MustBeStreaming indicates whether this processor is of "streaming" nature
 	// and is expected to emit the output one row at a time (in both row-by-row
 	// and the vectorized engines).
+	// MustBeStreaming 指示此处理器是否具有“流式处理”性质，并预计一次输出一行（在逐行和矢量化引擎中）。
 	MustBeStreaming() bool
 
 	// Run is the main loop of the processor.
+	// Run 是 processor 的主循环。
 	Run(context.Context)
 }
 
@@ -713,11 +717,15 @@ func (pb *ProcessorBaseNoHelper) moveToTrailingMeta() {
 // ProcessRowHelper is a wrapper on top of ProcOutputHelper.ProcessRow(). It
 // takes care of handling errors and drain requests by moving the processor to
 // StateDraining.
+// ProcessRowHelper 是 ProcOutputHelper.ProcessRow() 之上的包装器。
+// 它通过将处理器移至 StateDraining 来处理错误和耗尽请求。
 //
 // It takes a row and returns the row after processing. The return value can be
 // nil, in which case the caller shouldn't return anything to its consumer; it
 // should continue processing other rows, with the awareness that the processor
 // might have been transitioned to the draining phase.
+// 它获取一行并在处理后返回该行。 返回值可以是 nil，在这种情况下，调用者不应该向其消费者返回任何东西；
+// 它应该继续处理其他行，并意识到处理器可能已经过渡到排空阶段。
 func (pb *ProcessorBase) ProcessRowHelper(row rowenc.EncDatumRow) rowenc.EncDatumRow {
 	outRow, ok, err := pb.OutputHelper.ProcessRow(pb.Ctx, row)
 	if err != nil {

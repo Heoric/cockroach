@@ -23,21 +23,28 @@ import (
 
 // FoldingControl is used to control whether normalization rules allow constant
 // folding of VolatilityStable operators.
+// FoldingControl 用于控制规范化规则是否允许 VolatilityStable 运算符的常量折叠。
 //
 // FoldingControl can be initialized in either "allow stable folds" or "disallow
 // stable folds" state.
+// FoldingControl 可以在“允许稳定折叠”或“不允许稳定折叠”状态下初始化。
 //
 // For a query with placeholders, we don't want to fold stable operators when
 // building the reusable normalized expression; we want to fold them at
 // AssignPlaceholder time.
+// 对于带有占位符的查询，我们不想在构建可重用的规范化表达式时折叠稳定运算符；
+// 我们想在 AssignPlaceholder 时间折叠它们。
 //
 // For a query without placeholders, we build and optimize the expression
 // allowing stable folds; we need to know if any stable folds occurred so we can
 // prevent caching the resulting plan.
+// 对于没有占位符的查询，我们构建并优化允许稳定折叠的表达式；
+// 我们需要知道是否发生了任何稳定的折叠，以便我们可以防止缓存生成的计划。
 //
 // Examples illustrating the various cases:
+// 说明各种情况的示例：
 //
-//  1) Prepare and execute query with placeholders
+//  1. Prepare and execute query with placeholders
 //
 //     SELECT * FROM t WHERE time > now() - $1
 //
@@ -46,8 +53,11 @@ import (
 //     AssignPlaceholders; when the expression is recreated, now() will be
 //     folded, along with the subtraction. If we have an index on time, we will
 //     use it.
+//     在 prepare 期间，我们禁用稳定折叠，因此不会折叠 now() 调用。
+//     在执行时，我们在运行 AssignPlaceholders 之前启用稳定折叠；
+//     当重新创建表达式时，now() 将与减法一起折叠。 如果我们有时间索引，我们将使用它。
 //
-//  2) Prepare and execute query without placeholders
+//  2. Prepare and execute query without placeholders
 //
 //     SELECT * FROM t WHERE time > now() - '1 minute'::INTERVAL
 //
@@ -58,8 +68,12 @@ import (
 //     AssignPlaceholders with stable folds enabled. We don't have any
 //     placeholders here, but AssignPlaceholders will nevertheless recreate the
 //     expression, allowing folding to happen.
+//     在准备期间，我们禁用稳定折叠。 建立表达式后，我们检查是否真的阻止了任何稳定的折叠；
+//     在这种情况下我们做到了。 因此，我们在准备时不会完全优化备忘录。
+//     在执行时，我们将采用与示例 1 相同的路径，在启用稳定折叠的情况下运行 AssignPlaceholders。
+//     我们这里没有任何占位符，但 AssignPlaceholders 将重新创建表达式，允许折叠发生。
 //
-//  3) Execute query without placeholders
+//  3. Execute query without placeholders
 //
 //     SELECT * FROM t WHERE time > now() - '1 minute'::INTERVAL
 //
@@ -69,14 +83,18 @@ import (
 //     the plan cache. In the future, we may want to detect queries that are
 //     re-executed frequently and cache a non-folded version like in the prepare
 //     case.
-//
+//     为了执行未提前准备的查询，我们构建启用了稳定折叠的表达式。
+//     之后，我们检查是否确实有任何稳定的折叠，在这种情况下，我们不会将生成的计划放入计划缓存中。
+//     将来，我们可能希望检测频繁重新执行的查询，并像 prepare 一样缓存非折叠版本。
 type FoldingControl struct {
 	// allowStable controls whether canFoldOperator returns true or false for
 	// VolatilityStable.
+	// allowStable 控制 canFoldOperator 是否为 VolatilityStable 返回 true 或 false。
 	allowStable bool
 
 	// encounteredStableFold is true if canFoldOperator was called with
 	// VolatilityStable.
+	// 如果使用 VolatilityStable 调用了 canFoldOperator，则 encounteredStableFold 为真
 	encounteredStableFold bool
 }
 
@@ -96,9 +114,11 @@ func (fc *FoldingControl) DisallowStableFolds() {
 
 // TemporarilyDisallowStableFolds disallows stable folds, runs
 // the given function, and restores the original FoldingControl state.
-//
+// TemporarilyDisallowStableFolds 不允许稳定折叠，运行给定的函数，
+// 并恢复原始的 FoldingControl 状态。
 // This is used when building expressions like computed column expressions and
 // we want to be able to check whether the expression contains stable operators.
+// 这在构建表达式（如计算列表达式）时使用，我们希望能够检查表达式是否包含稳定的运算符。
 func (fc *FoldingControl) TemporarilyDisallowStableFolds(fn func()) {
 	save := *fc
 	defer func() { *fc = save }()
@@ -119,6 +139,8 @@ func (fc *FoldingControl) canFoldOperator(v tree.Volatility) bool {
 
 // PreventedStableFold returns true if we disallowed a stable fold; can only be
 // called if DisallowStableFolds() was called.
+// 如果我们不允许稳定折叠，则 PreventedStableFold 返回 true；
+// 只能在调用 DisallowStableFolds() 时调用。
 func (fc *FoldingControl) PreventedStableFold() bool {
 	if fc.allowStable {
 		panic(errors.AssertionFailedf("called in allow-stable state"))
@@ -128,9 +150,10 @@ func (fc *FoldingControl) PreventedStableFold() bool {
 
 // PermittedStableFold returns true if we allowed a stable fold; can only be
 // called if AllowStableFolds() was called.
-//
+// 如果我们允许稳定折叠，PermittedStableFold 返回 true； 只能在调用 AllowStableFolds() 时调用。
 // Note that this does not guarantee that folding actually occurred - it is
 // possible for folding to fail (e.g. due to the operator hitting an error).
+// 请注意，这并不能保证折叠确实发生了——折叠有可能失败（例如，由于操作员遇到错误）。
 func (fc *FoldingControl) PermittedStableFold() bool {
 	if !fc.allowStable {
 		panic(errors.AssertionFailedf("called in disallow-stable state"))
@@ -141,18 +164,22 @@ func (fc *FoldingControl) PermittedStableFold() bool {
 // CanFoldOperator returns true if we should fold an operator with the given
 // volatility. This depends on the foldingVolatility setting of the factory
 // (which can be either VolatilityImmutable or VolatilityStable).
+// 如果我们应该折叠具有给定波动率的运算符，则 CanFoldOperator 返回 true。
+// 这取决于工厂的 foldingVolatility 设置（可以是 VolatilityImmutable 或 VolatilityStable）。
 func (c *CustomFuncs) CanFoldOperator(v tree.Volatility) bool {
 	return c.f.foldingControl.canFoldOperator(v)
 }
 
 // FoldNullUnary replaces the unary operator with a typed null value having the
 // same type as the unary operator would have.
+// FoldNullUnary 将一元运算符替换为与一元运算符具有相同类型的类型化空值。
 func (c *CustomFuncs) FoldNullUnary(op opt.Operator, input opt.ScalarExpr) opt.ScalarExpr {
 	return c.f.ConstructNull(memo.InferUnaryType(op, input.DataType()))
 }
 
 // FoldNullBinary replaces the binary operator with a typed null value having
 // the same type as the binary operator would have.
+// FoldNullBinary 将二元运算符替换为与二元运算符具有相同类型的类型化空值。
 func (c *CustomFuncs) FoldNullBinary(op opt.Operator, left, right opt.ScalarExpr) opt.ScalarExpr {
 	return c.f.ConstructNull(memo.InferBinaryType(op, left.DataType(), right.DataType()))
 }
@@ -160,12 +187,15 @@ func (c *CustomFuncs) FoldNullBinary(op opt.Operator, left, right opt.ScalarExpr
 // AllowNullArgs returns true if the binary operator with the given inputs
 // allows one of those inputs to be null. If not, then the binary operator will
 // simply be replaced by null.
+// 如果具有给定输入的二元运算符允许这些输入之一为空，则 AllowNullArgs 返回 true。
+// 如果不是，则二元运算符将简单地替换为 null。
 func (c *CustomFuncs) AllowNullArgs(op opt.Operator, left, right opt.ScalarExpr) bool {
 	return memo.BinaryAllowsNullArgs(op, left.DataType(), right.DataType())
 }
 
 // IsListOfConstants returns true if elems is a list of constant values or
 // tuples.
+// 如果 elems 是常量值或元组的列表，则 IsListOfConstants 返回 true。
 func (c *CustomFuncs) IsListOfConstants(elems memo.ScalarListExpr) bool {
 	for _, elem := range elems {
 		if !c.IsConstValueOrGroupOfConstValues(elem) {
@@ -177,6 +207,7 @@ func (c *CustomFuncs) IsListOfConstants(elems memo.ScalarListExpr) bool {
 
 // FoldArray evaluates an Array expression with constant inputs. It returns the
 // array as a Const datum with type TArray.
+// FoldArray 计算具有常量输入的数组表达式。 它将数组作为类型为 TArray 的 Const 数据返回。
 func (c *CustomFuncs) FoldArray(elems memo.ScalarListExpr, typ *types.T) opt.ScalarExpr {
 	elemType := typ.ArrayContents()
 	a := tree.NewDArray(elemType)
@@ -194,12 +225,14 @@ func (c *CustomFuncs) FoldArray(elems memo.ScalarListExpr, typ *types.T) opt.Sca
 
 // IsConstValueOrGroupOfConstValues returns true if the input is a constant,
 // or an array or tuple with only constant elements.
+// IsConstValueOrGroupOfConstValues 如果输入是常量，或者是仅包含常量元素的数组或元组，则返回 true。
 func (c *CustomFuncs) IsConstValueOrGroupOfConstValues(input opt.ScalarExpr) bool {
 	return memo.CanExtractConstDatum(input)
 }
 
 // IsNeverNull returns true if the input is a non-null constant value,
 // any tuple, or any array.
+// IsNeverNull 如果输入是非空常量值、任何元组或任何数组，则返回 true。
 func (c *CustomFuncs) IsNeverNull(input opt.ScalarExpr) bool {
 	switch input.Op() {
 	case opt.TrueOp, opt.FalseOp, opt.ConstOp, opt.TupleOp, opt.ArrayOp:
@@ -213,6 +246,9 @@ func (c *CustomFuncs) IsNeverNull(input opt.ScalarExpr) bool {
 // null element. Note that it only returns true if one element is known to be
 // null. For example, given the tuple (1, x), it will return false because x is
 // not guaranteed to be null.
+// 如果输入元组至少有一个常量 null 元素，则 HasNullElement 返回 true。
+// 请注意，它仅在已知一个元素为空时才返回 true。
+// 例如，给定元组 (1, x)，它将返回 false，因为不能保证 x 为空。
 func (c *CustomFuncs) HasNullElement(tup *memo.TupleExpr) bool {
 	for _, e := range tup.Elems {
 		if e.Op() == opt.NullOp {
@@ -227,6 +263,9 @@ func (c *CustomFuncs) HasNullElement(tup *memo.TupleExpr) bool {
 // returns true if all elements are known to be null. For example, given the
 // tuple (NULL, x), it will return false because x is not guaranteed to be
 // null.
+// 如果输入元组只有常量、空元素，或者元组为空（有 0 个元素），HasAllNullElements 返回 true。
+// 请注意，它仅在已知所有元素都为空时才返回 true。
+// 例如，给定元组 (NULL, x)，它将返回 false，因为不能保证 x 为空。
 func (c *CustomFuncs) HasAllNullElements(tup *memo.TupleExpr) bool {
 	for _, e := range tup.Elems {
 		if e.Op() != opt.NullOp {
@@ -240,6 +279,9 @@ func (c *CustomFuncs) HasAllNullElements(tup *memo.TupleExpr) bool {
 // non-null element. Note that it only returns true if one element is known to
 // be non-null. For example, given the tuple (NULL, x), it will return false
 // because x is not guaranteed to be non-null.
+// 如果输入元组至少有一个常量非空元素，则 HasNonNullElement 返回 true。
+// 请注意，它仅在已知一个元素为非空时才返回 true。
+// 例如，给定元组 (NULL, x)，它将返回 false，因为不能保证 x 非空。
 func (c *CustomFuncs) HasNonNullElement(tup *memo.TupleExpr) bool {
 	for _, e := range tup.Elems {
 		// It is guaranteed that the input has at least one non-null element if
@@ -248,6 +290,10 @@ func (c *CustomFuncs) HasNonNullElement(tup *memo.TupleExpr) bool {
 		// elements or not. For example, (NULL, (NULL, NULL)) IS NULL evaluates
 		// to false because one first-level element is not null - the second is
 		// a tuple.
+		// 如果 e 不为空并且它是常量值、数组或元组，则保证输入至少有一个非空元素。
+		// 请注意，嵌套元组是否具有非空元素并不重要。
+		// 例如，(NULL, (NULL, NULL)) IS NULL 计算结果为 false，因为一个第一级元素不为空
+		// - 第二个是元组。
 		if e.Op() != opt.NullOp && (opt.IsConstValueOp(e) || e.Op() == opt.TupleOp || e.Op() == opt.ArrayOp) {
 			return true
 		}
@@ -260,6 +306,9 @@ func (c *CustomFuncs) HasNonNullElement(tup *memo.TupleExpr) bool {
 // only returns true if all elements are known to be non-null. For example,
 // given the tuple (1, x), it will return false because x is not guaranteed to
 // be non-null.
+// 如果输入元组包含所有常量、非空元素，或者元组为空（包含 0 个元素），
+// 则 HasAllNonNullElements 返回 true。 请注意，它仅在已知所有元素都为非空时才返回 true。
+// 例如，给定元组 (1, x)，它将返回 false，因为不能保证 x 非空。
 func (c *CustomFuncs) HasAllNonNullElements(tup *memo.TupleExpr) bool {
 	for _, e := range tup.Elems {
 		// It is not guaranteed that the input has all non-null elements if e
@@ -267,6 +316,10 @@ func (c *CustomFuncs) HasAllNonNullElements(tup *memo.TupleExpr) bool {
 		// that it doesn't matter whether a nested tuple has non-null elements
 		// or not. For example, (1, (NULL, NULL)) IS NOT NULL evaluates to true
 		// because all first-level elements are not null.
+
+		// 如果 e 为 null 或者它既不是常量值、数组也不是元组，则不能保证输入包含所有非 null 元素。
+		// 请注意，嵌套元组是否具有非空元素并不重要。
+		// 例如，(1, (NULL, NULL)) IS NOT NULL 求值为真，因为所有第一级元素都不为空。
 		if e.Op() == opt.NullOp || !(opt.IsConstValueOp(e) || e.Op() == opt.TupleOp || e.Op() == opt.ArrayOp) {
 			return false
 		}
@@ -278,6 +331,9 @@ func (c *CustomFuncs) HasAllNonNullElements(tup *memo.TupleExpr) bool {
 // a constant expression as long as it finds an appropriate overload function
 // for the given operator and input types, and the evaluation causes no error.
 // Otherwise, it returns ok=false.
+// FoldBinary 计算具有常量输入的二进制表达式。
+// 只要它为给定的运算符和输入类型找到合适的重载函数，
+// 它就会返回一个常量表达式，并且计算不会导致错误。 否则，它返回 ok=false。
 func (c *CustomFuncs) FoldBinary(
 	op opt.Operator, left, right opt.ScalarExpr,
 ) (_ opt.ScalarExpr, ok bool) {
@@ -298,6 +354,9 @@ func (c *CustomFuncs) FoldBinary(
 // a constant expression as long as it finds an appropriate overload function
 // for the given operator and input type, and the evaluation causes no error.
 // Otherwise, it returns ok=false.
+// FoldUnary 计算具有常量输入的一元表达式。
+// 只要它为给定的运算符和输入类型找到合适的重载函数，它就会返回一个常量表达式，
+// 并且计算不会导致错误。 否则，它返回 ok=false。
 func (c *CustomFuncs) FoldUnary(op opt.Operator, input opt.ScalarExpr) (_ opt.ScalarExpr, ok bool) {
 	datum := memo.ExtractConstDatum(input)
 
@@ -316,6 +375,9 @@ func (c *CustomFuncs) FoldUnary(op opt.Operator, input opt.ScalarExpr) (_ opt.Sc
 // foldStringToRegclassCast resolves a string that is a table name into an OID
 // by resolving the table name and returning its table ID. This permits the
 // optimizer to do intelligent things like push down filters that look like:
+// ... WHERE oid = 'my_table'::REGCLASS
+// foldStringToRegclassCast 通过解析表名并返回其表ID，将作为表名的字符串解析为OID。
+// 这允许优化器做一些智能的事情，比如下推过滤器，看起来像：
 // ... WHERE oid = 'my_table'::REGCLASS
 func (c *CustomFuncs) foldStringToRegclassCast(
 	input opt.ScalarExpr, typ *types.T,
@@ -344,6 +406,8 @@ func (c *CustomFuncs) foldStringToRegclassCast(
 // FoldCast evaluates a cast expression with a constant input. It returns a
 // constant expression as long as the evaluation causes no error. Otherwise, it
 // returns ok=false.
+// FoldCast 计算具有常量输入的转换表达式。
+// 只要评估没有导致错误，它就会返回一个常量表达式。 否则，它返回 ok=false。
 func (c *CustomFuncs) FoldCast(input opt.ScalarExpr, typ *types.T) (_ opt.ScalarExpr, ok bool) {
 	if typ.Family() == types.OidFamily {
 		if typ.Oid() == types.RegClass.Oid() && input.DataType().Family() == types.StringFamily {
@@ -375,12 +439,17 @@ func (c *CustomFuncs) FoldCast(input opt.ScalarExpr, typ *types.T) (_ opt.Scalar
 // FoldAssignmentCast evaluates an assignment cast expression with a constant
 // input. It returns a constant expression as long as the evaluation causes no
 // error. Otherwise, it returns ok=false.
+// FoldAssignmentCast 评估具有常量输入的赋值转换表达式。
+// 只要评估没有导致错误，它就会返回一个常量表达式。 否则，它返回 ok=false。
 //
 // It is similar to FoldCast, but differs because it performs an assignment cast
 // which has slightly different semantics than an explicit cast (see
 // tree.PerformAssignmentCast). Also, it does not have special logic for casts
 // from strings to OIDs because such casts are not allowed in assignment
 // contexts.
+// 它类似于 FoldCast，但有所不同，因为它执行的赋值转换与显式转换的语义略有不同
+//（请参阅 tree.PerformAssignmentCast）。
+// 此外，它没有从字符串到 OID 的转换的特殊逻辑，因为在赋值上下文中不允许进行此类转换。
 func (c *CustomFuncs) FoldAssignmentCast(
 	input opt.ScalarExpr, typ *types.T,
 ) (_ opt.ScalarExpr, ok bool) {
@@ -400,20 +469,25 @@ func (c *CustomFuncs) FoldAssignmentCast(
 
 // isMonotonicConversion returns true if conversion of a value from FROM to
 // TO is monotonic.
+// 如果值从 FROM 到 TO 的转换是单调的，则 isMonotonicConversion 返回 true。
 // That is, if a and b are values of type FROM, then
+// 也就是说，如果 a 和 b 是 FROM 类型的值，那么
 //
 //   1. a = b implies a::TO = b::TO and
 //   2. a < b implies a::TO <= b::TO
 //
 // Property (1) can be violated by cases like:
+// 属性 (1) 可能会被以下情况违反：
 //
 //   '-0'::FLOAT = '0'::FLOAT, but '-0'::FLOAT::STRING != '0'::FLOAT::STRING
 //
 // Property (2) can be violated by cases like:
+// 属性 (2) 可能会被以下情况违反：
 //
 //   2 < 10, but  2::STRING > 10::STRING.
 //
 // Note that the stronger version of (2),
+// 请注意 (2) 的更强版本，
 //
 //   a < b implies a::TO < b::TO
 //
@@ -423,6 +497,9 @@ func (c *CustomFuncs) FoldAssignmentCast(
 // TIMESTAMP precisely falls on a date boundary).  We don't need this property
 // because we will subsequently check that the values can round-trip to ensure
 // that we don't lose any information by doing the conversion.
+// 不是必需的，例如，从 TIMESTAMP 到 DATE 的转换通常不是这样，
+// 但是在 FROM 和 TO 下的值“相同”的某些情况下（例如 TIMESTAMP 恰好落在日期边界上）。
+// 我们不需要此属性，因为我们随后将检查这些值是否可以往返，以确保我们不会因进行转换而丢失任何信息。
 // TODO(justin): fill this out with the complete set of such conversions.
 func isMonotonicConversion(from, to *types.T) bool {
 	switch from.Family() {
@@ -448,6 +525,9 @@ func isMonotonicConversion(from, to *types.T) bool {
 // returns a constant expression as long as it finds an appropriate overload
 // function for the given operator and input types, and the evaluation causes
 // no error. Otherwise, it returns ok=false.
+// FoldComparison 评估具有常量输入的比较表达式。
+// 只要它为给定的运算符和输入类型找到合适的重载函数，它就会返回一个常量表达式，并且计算不会导致错误。
+// 否则，它返回 ok=false。
 func (c *CustomFuncs) FoldComparison(
 	op opt.Operator, left, right opt.ScalarExpr,
 ) (_ opt.ScalarExpr, ok bool) {
@@ -475,6 +555,8 @@ func (c *CustomFuncs) FoldComparison(
 // FoldIndirection evaluates an array indirection operator with constant inputs.
 // It returns the referenced array element as a constant value, or ok=false if
 // the evaluation results in an error.
+// FoldIndirection 评估具有常量输入的数组间接运算符。
+// 它返回引用的数组元素作为常量值，如果评估结果出错，则返回 ok=false。
 func (c *CustomFuncs) FoldIndirection(input, index opt.ScalarExpr) (_ opt.ScalarExpr, ok bool) {
 	// Index is 1-based, so convert to 0-based.
 	indexD := memo.ExtractConstDatum(index)
@@ -511,22 +593,28 @@ func (c *CustomFuncs) FoldIndirection(input, index opt.ScalarExpr) (_ opt.Scalar
 // constant tuple input (though tuple field values do not need to be constant).
 // It returns the referenced tuple field value, or ok=false if folding is not
 // possible or results in an error.
+// FoldColumnAccess 尝试评估具有常量元组输入的元组列访问运算符（尽管元组字段值不需要是常量）。
+// 它返回引用的元组字段值，如果无法折叠或导致错误，则返回 ok=false。
 func (c *CustomFuncs) FoldColumnAccess(
 	input opt.ScalarExpr, idx memo.TupleOrdinal,
 ) (_ opt.ScalarExpr, ok bool) {
 	// Case 1: The input is NULL. This is possible when FoldIndirection has
 	// already folded an Indirection expression with an out-of-bounds index to
 	// Null.
+	// 情况 1：输入为 NULL。 当 FoldIndirection 已经将索引越界的
+	// Indirection 表达式折叠为 Null 时，这是可能的。
 	if n, ok := input.(*memo.NullExpr); ok {
 		return c.f.ConstructNull(n.Typ.TupleContents()[idx]), true
 	}
 
 	// Case 2: The input is a static tuple constructor.
+	// 情况 2：输入是静态元组构造函数。
 	if tup, ok := input.(*memo.TupleExpr); ok {
 		return tup.Elems[idx], true
 	}
 
 	// Case 3: The input is a constant DTuple.
+	// 情况 3：输入是常量 DTuple。
 	if memo.CanExtractConstDatum(input) {
 		datum := memo.ExtractConstDatum(input)
 
@@ -543,6 +631,8 @@ func (c *CustomFuncs) FoldColumnAccess(
 // CanFoldFunctionWithNullArg returns true if the given function can be folded
 // to Null when any of its arguments are Null. A function can be folded to Null
 // in this case if all of the following are true:
+// CanFoldFunctionWithNullArg 如果给定函数在其任何参数为 Null 时可以折叠为 Null，则返回 true。
+// 在这种情况下，如果满足以下所有条件，则可以将函数折叠为 Null：
 //
 //   1. It does not allow Null arguments (NullableArgs=false).
 //   2. It is a normal function, not an aggregate, window, or generator.
@@ -572,6 +662,9 @@ func (c *CustomFuncs) FunctionReturnType(private *memo.FunctionPrivate) *types.T
 // a constant expression as long as the function is contained in the
 // FoldFunctionAllowlist, and the evaluation causes no error. Otherwise, it
 // returns ok=false.
+// FoldFunction 计算具有常量输入的函数表达式。
+// 只要函数包含在 FoldFunctionAllowlist 中，它就会返回一个常量表达式，并且计算不会导致错误。
+// 否则，它返回 ok=false。
 func (c *CustomFuncs) FoldFunction(
 	args memo.ScalarListExpr, private *memo.FunctionPrivate,
 ) (_ opt.ScalarExpr, ok bool) {

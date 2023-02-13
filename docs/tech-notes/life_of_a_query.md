@@ -13,10 +13,14 @@ a high-level unifying view of the structure of the various components; none will
 be explored in particular depth but pointers to other documentation will be
 provided where such documentation exists. Code pointers will abound.
 
+本文档旨在解释 CockroachDB 中 SQL 查询的执行，遵循系统各个层的代码路径：网络协议、SQL 会话管理、查询解析、计划和优化、执行、键/值服务、事务管理、 请求路由、请求处理、Raft 共识、磁盘存储引擎等。其思想是提供各种组件结构的高级统一视图； 不会对任何内容进行特别深入的探讨，但会在存在此类文档的情况下提供指向其他文档的指针。 代码指针将比比皆是。
+
 This document will generally not discuss design decisions, but rather focus on
 tracing through the actual (current) code. In the interest of brevity, it only
 covers the most significant and common parts of query execution, and omits a
 large amount of detail and special cases.
+
+本文档通常不会讨论设计决策，而是侧重于跟踪实际（当前）代码。 为了简洁起见，它只涵盖了查询执行中最重要和最常见的部分，并省略了大量的细节和特殊情况。
 
 The intended audience is folks curious about a walk through the architecture of
 a modern database, presented differently than in a [design
@@ -24,12 +28,16 @@ doc](https://github.com/cockroachdb/cockroach/blob/master/docs/design.md). It
 will hopefully also be helpful for open source contributors and new Cockroach
 Labs engineers.
 
+目标受众是那些对了解现代数据库架构感到好奇的人，其呈现方式与 [设计文档 (https://github.com/cockroachdb/cockroach/blob/master/docs/design.md) 不同。 它也有望对开源贡献者和新的 Cockroach Labs 工程师有所帮助。
+
 ## PostgreSQL Client Protocol
 
 A SQL query arrives at the server through the [PostgreSQL wire
 protocol](https://www.postgresql.org/docs/current/protocol.html).
 CockroachDB uses this protocol for compatibility with existing client drivers
 and applications.
+
+SQL 查询通过 [PostgreSQL 有线协议](https://www.postgresql.org/docs/current/protocol.html) 到达服务器。 CockroachDB 使用此协议来兼容现有的客户端驱动程序和应用程序。
 
 The protocol is implemented by the [`pgwire` package](https://github.com/cockroachdb/cockroach/tree/9c86c8f937e3c5d4728079d2bdb2a98943a7d872/pkg/sql/pgwire).
 Once a client [connects](https://github.com/cockroachdb/cockroach/blob/4e4f31a0ed1a8ea985b9ab6f72e29266b259900e/pkg/server/server.go#L2250),
@@ -49,11 +57,15 @@ the results, and
 [send](https://github.com/cockroachdb/cockroach/blob/89621764d4c2d438d1781238f10e9ef27ef2c392/pkg/sql/pgwire/conn.go#L1451)
 a result message to the client.
 
+该协议由 pgwire 包实现。 一旦客户端连接，它就由 pgwire.conn 表示，它包装了一个 net.Conn 套接字接口。 conn.serveImpl 实现主要的“读取、解析、执行”循环：在连接的生命周期中，我们读取一条消息（通常包含一个或多个 SQL 语句）、解析查询、将它们传递给 connExecutor 执行、序列化和缓冲 结果，并向客户端发送结果消息。
+
 ## SQL Processing
 
 CockroachDB's SQL engine sits between the client connection and the core
 key/value service, translating SQL queries into key/value operations. It
 broadly goes through the following stages:
+
+CockroachDB 的 SQL 引擎位于客户端连接和核心键/值服务之间，将 SQL 查询转换为键/值操作。 大致经历以下几个阶段：
 
 Parsing → Logical Planning & Optimization → Physical Planning → Execution
 
@@ -68,6 +80,8 @@ by [goyacc](https://pkg.go.dev/golang.org/x/tools/cmd/goyacc) from a Yacc-like
 [grammar file](https://github.com/cockroachdb/cockroach/blob/d96babaa3d484d4df156293010f922bd3fb2d970/pkg/sql/parser/sql.y).
 This file specifies CockroachDB's SQL dialect, and was originally copied from
 PostgreSQL and then modified.
+
+解析将表示为字符串的原始 SQL 语句转换为更易于使用的抽象语法树 (AST)。 CockroachDB 使用由 goyacc 从类似 Yacc 的语法文件生成的 LALR 解析器。 该文件指定了 CockroachDB 的 SQL 方言，最初是从 PostgreSQL 复制过来的，然后进行了修改。
 
 As we've already seen, `pgwire.conn` [parses](https://github.com/cockroachdb/cockroach/blob/9c86c8f937e3c5d4728079d2bdb2a98943a7d872/pkg/sql/pgwire/conn.go#L737)
 client statements using a [`parser.Parser`](https://github.com/cockroachdb/cockroach/blob/31dcbfc964f22ede5b7f827f4e6c0091ccfb132f/pkg/sql/parser/parse.go#L81) instance.
@@ -84,6 +98,8 @@ for some simple post-processing, and the lexer is
 to the generated parser which iterates over the tokens and applies the SQL
 grammar to them.
 
+正如我们已经看到的，pgwire.conn 使用 parser.Parser 实例解析客户端语句。 解析器首先将字符串扫描成标记——单独的部分，例如字符串或数字。 它一个接一个地执行此操作，直到遇到终止语句的分号。 然后对这些标记进行词法分析以进行一些简单的后处理，并将词法分析器传递给生成的解析器，该解析器迭代标记并将 SQL 语法应用于它们。
+
 The result of this process is a [`parser.Statement`](https://github.com/cockroachdb/cockroach/blob/31dcbfc964f22ede5b7f827f4e6c0091ccfb132f/pkg/sql/parser/parse.go#L35),
 which [wraps](https://github.com/cockroachdb/cockroach/blob/31dcbfc964f22ede5b7f827f4e6c0091ccfb132f/pkg/sql/parser/parse.go#L37)
 an AST [`tree.Statement`](https://github.com/cockroachdb/cockroach/blob/6349791f060743b515c7638b81ab3de2ee7bc0c4/pkg/sql/sem/tree/stmt.go#L86),
@@ -94,10 +110,14 @@ models the familiar `SELECT` clause, with recognizable fields such as `From` and
 [`tree.Expr`](https://github.com/cockroachdb/cockroach/blob/31dcbfc964f22ede5b7f827f4e6c0091ccfb132f/pkg/sql/sem/tree/expr.go#L27),
 nested algebraic expressions such as `tax / total * 100`.
 
+这个过程的结果是一个 parser.Statement，它包装了一个 AST tree.Statement，一个对 SQL 语法建模的树结构。 例如，tree.SelectClause 为熟悉的 SELECT 子句建模，带有可识别的字段，例如 From 和 Where。 AST的很多部分还包含了tree.Expr，tax/total*100等嵌套代数表达式。
+
 Note that the AST only represents the _syntax_ of the query, and says nothing
 about how, or even if, it can be executed — for example, it has no idea whether
 a table exists or what datatype a column has. Figuring that out is the job of
 the planner.
+
+**请注意，AST 仅表示查询的语法，并没有说明如何执行，甚至是否可以执行——例如，它不知道表是否存在或列的数据类型。 弄清楚这一点是计划者的工作。**
 
 ### Session Management
 
@@ -111,6 +131,8 @@ the commands in the statement buffer by repeatedly calling
 [`execCmd()`](https://github.com/cockroachdb/cockroach/blob/31db44da69bf21e67ebbef6fbb8c8bfb2e498efe/pkg/sql/conn_executor.go#L1525),
 [executing](https://github.com/cockroachdb/cockroach/blob/31db44da69bf21e67ebbef6fbb8c8bfb2e498efe/pkg/sql/conn_executor.go#L1578)
 any statements.
+
+一旦 pgwire.conn 解析了语句，它就会被放入 sql.ExecStmt 命令中并推入语句缓冲区。 在此缓冲区的另一侧是在连接设置期间创建的 sql.connExecutor。 它通过重复调用 execCmd() 来处理语句缓冲区中的命令，执行任何语句。
 
 As [`execStmt()`](https://github.com/cockroachdb/cockroach/blob/fc67a0c9202af348e919afc1e1f70acc9a83b300/pkg/sql/conn_executor_exec.go#L69)
 executes statements, it records various
@@ -126,6 +148,8 @@ It then branches off depending on the state of the SQL transaction:
 [waiting for retry](https://github.com/cockroachdb/cockroach/blob/fc67a0c9202af348e919afc1e1f70acc9a83b300/pkg/sql/conn_executor_exec.go#L1252),
 or [none](https://github.com/cockroachdb/cockroach/blob/fc67a0c9202af348e919afc1e1f70acc9a83b300/pkg/sql/conn_executor_exec.go#L1148). 
 
+当 execStmt() 执行语句时，它会记录各种会话数据，例如当前数据库和用户定义的设置，并实现一个有限状态机来跟踪事务状态：事务刚刚开始还是刚刚结束，或者我们是否遇到了错误？ 然后它根据 SQL 事务的状态分支：打开、中止、等待重试或无。
+
 Simple statements are primarily handled here. For example, a
 [`BEGIN` statement](https://github.com/cockroachdb/cockroach/blob/fc67a0c9202af348e919afc1e1f70acc9a83b300/pkg/sql/conn_executor_exec.go#L1152)
 will [open](https://github.com/cockroachdb/cockroach/blob/af9e6460c83a812ac320d3329f4c55a9b94367a1/pkg/sql/txn_state.go#L190)
@@ -137,10 +161,14 @@ that transaction. If a query runs outside of a transaction,
 it will use an [implicit transaction](https://github.com/cockroachdb/cockroach/blob/fc67a0c9202af348e919afc1e1f70acc9a83b300/pkg/sql/conn_executor_exec.go#L1183).
 Query execution uses this transaction to dispatch key/value requests. 
 
+这里主要处理简单语句。 例如，BEGIN 语句将在键/值服务中打开一个新的 kv.Txn 事务（稍后我们将返回），COMMIT 语句将提交该事务。 如果查询在事务之外运行，它将使用隐式事务。 查询执行使用此事务来分派键/值请求。
+
 ### Statement Execution
 
 Now that we have figured out what (KV) transaction we're running inside of, we
 are concerned with executing statements one at a time.
+
+现在我们已经弄清楚我们在其中运行的 (KV) 事务，我们关心的是一次执行一条语句。
 
 There is an impedance mismatch when interfacing SQL `connExecutor` code,
 which is stream-oriented (with statements being executed one at a time
@@ -632,7 +660,7 @@ these operators are:
 * `Noop`: implemented by [`noopOperator`](https://github.com/cockroachdb/cockroach/blob/3d764753c54bd927b130656db49aa4f372abf8a7/pkg/sql/colexecop/operator.go#L355)
   which [does nothing](https://github.com/cockroachdb/cockroach/blob/3d764753c54bd927b130656db49aa4f372abf8a7/pkg/sql/colexecop/operator.go#L368).
 * `ordered`: uses an
-[`OrderedSynchronizer`](https://github.com/cockroachdb/cockroach/blob/3d764753c54bd927b130656db49aa4f372abf8a7/pkg/sql/colexec/ordered_synchronizer.eg.go#L34)
+  [`OrderedSynchronizer`](https://github.com/cockroachdb/cockroach/blob/3d764753c54bd927b130656db49aa4f372abf8a7/pkg/sql/colexec/ordered_synchronizer.eg.go#L34)
   operator to [combine](https://github.com/cockroachdb/cockroach/blob/3d764753c54bd927b130656db49aa4f372abf8a7/pkg/sql/colexec/ordered_synchronizer.eg.go#L121)
   the ordered inputs from the two remote input streams.
 * Remote stream: implemented as `Inbox`/`Outbox` operator pairs that

@@ -228,13 +228,18 @@ func (s *sortAllProcessor) Start(ctx context.Context) {
 }
 
 // fill fills s.rows with the input's rows.
+// fill 用输入的行填充 s.rows。
 //
 // Metadata is buffered in s.trailingMeta.
+// 元数据缓冲在 s.trailingMeta 中。
 //
 // The ok retval is false if an error occurred or if the input returned an error
 // metadata record. The caller is expected to inspect the error (if any) and
 // drain if it's not recoverable. It is possible for ok to be false even if no
 // error is returned - in case an error metadata was received.
+// 如果发生错误或输入返回错误元数据记录，则 ok retval 为 false。
+// 调用者应检查错误（如果有）并在错误不可恢复时将其排出。
+// 即使没有返回错误，ok 也可能为 false - 如果收到错误元数据。
 func (s *sortAllProcessor) fill() (ok bool, _ error) {
 	ctx := s.EvalCtx.Ctx()
 

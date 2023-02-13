@@ -1200,11 +1200,14 @@ type PlanDistribution int
 
 const (
 	// LocalPlan indicates that the whole plan is executed on the gateway node.
+	// LocalPlan表示整个计划在网关节点上执行。
 	LocalPlan PlanDistribution = iota
 
 	// PartiallyDistributedPlan indicates that some parts of the plan are
 	// distributed while other parts are not (due to limitations of DistSQL).
 	// Note that such plans can only be created by distSQLSpecExecFactory.
+	// PartiallyDistributedPlan 表示计划的某些部分是分布式的，而其他部分不是（由于 DistSQL 的限制）。
+	// 请注意，此类计划只能由 distSQLSpecExecFactory 创建。
 	//
 	// An example of such plan is the plan with distributed scans that have a
 	// filter which operates with an OID type (DistSQL currently doesn't
@@ -1212,9 +1215,14 @@ const (
 	// up planning a noop processor on the gateway node that receives all
 	// scanned rows from the remote nodes while performing the filtering
 	// locally.
+	// 这种计划的一个例子是分布式扫描计划，它有一个使用 OID 类型操作的过滤器
+	//（DistSQL 目前不支持这种类型的分布式操作）。
+	// 因此，我们最终在网关节点上规划了一个 noop 处理器，
+	// 它在本地执行过滤的同时从远程节点接收所有扫描的行。
 	PartiallyDistributedPlan
 
 	// FullyDistributedPlan indicates that the whole plan is distributed.
+	// FullyDistributedPlan 表示整个计划是分布式的。
 	FullyDistributedPlan
 )
 

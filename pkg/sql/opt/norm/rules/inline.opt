@@ -56,6 +56,8 @@
 # refer to constant input values, and then inlines those constant values in
 # place of the corresponding variable references. This sometimes allows further
 # simplifications such as constant folding or generation of constrained scans.
+# InlineSelectConstants 在 Filters 表达式中查找引用常量输入值的变量引用，
+# 然后内联这些常量值以代替相应的变量引用。 这有时允许进一步简化，例如常量折叠或生成约束扫描。
 [InlineSelectConstants, Normalize]
 (Select
     $input:* &
@@ -162,11 +164,16 @@
 # Select independent of the Project. Because these filters are pushed below the
 # Project, exploration rules that match on the (Select (Scan)) pattern can
 # generate plans that use indexes on virtual columns.
+# InlineSelectVirtualColumns 通过内联虚拟列表达式将引用虚拟列的选择过滤器推送到项目中。
+# 这使得选择独立于项目。 因为这些过滤器被推送到项目下方，所以匹配 (Select (Scan))
+# 模式的探索规则可以生成在虚拟列上使用索引的计划。
 #
 # Filters on non-virtual projected columns are not inlined because the
 # expression would be executed twice (once in the filter and once in the
 # projection), adding overhead without any chance of a secondary index on a
 # virtual column being used in the optimized plan.
+# 非虚拟投影列上的过滤器未内联，因为表达式将执行两次（一次在过滤器中，一次在投影中），
+# 增加了开销，没有任何机会在优化计划中使用虚拟列上的二级索引。
 #
 # Notice that this rule is similar to PushSelectIntoInlinableProject. The key
 # difference is that PushSelectIntoInlinableProject only inlines simple
@@ -174,12 +181,19 @@
 # Conversely, InlineSelectVirtualColumns does not discriminate by the type of
 # expression. It will inline all virtual columns in the hopes that inlining will
 # lead to a query plan that uses a virtual column index.
+# 请注意，此规则类似于 PushSelectIntoInlinableProject。
+# 关键区别在于 PushSelectIntoInlinableProject 仅内联简单表达式，在计算两次时会增加可忽略的开销。
+# 相反，InlineSelectVirtualColumns 不区分表达式的类型。
+# 它将内联所有虚拟列，希望内联将导致使用虚拟列索引的查询计划。
 #
 # Also, PushSelectIntoInlinableProject will inline filters if and only if all of
 # the filter items are inlinable (by its definition), whereas
 # InlineSelectVirtualColumns will split the input filters into two groups: one
 # to inline below the Project, and one to leave above the Project. This allows
 # filters on virtual columns to be pushed down in more cases.
+# 此外，PushSelectIntoInlinableProject 将内联过滤器当且仅当所有过滤器项都是可内联的（根据其定义），
+# 而 InlineSelectVirtualColumns 会将输入过滤器分成两组：
+# 一组内联在项目下方，另一组留在项目上方。 这允许在更多情况下下推虚拟列上的过滤器。
 #
 # For example, consider the table and query:
 #

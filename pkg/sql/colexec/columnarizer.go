@@ -27,30 +27,41 @@ import (
 )
 
 // columnarizerMode indicates the mode of operation of the Columnarizer.
+// columnarizerMode 指示 Columnarizer 的操作模式。
 type columnarizerMode int
 
 const (
 	// columnarizerBufferingMode is the mode of operation in which the
 	// Columnarizer will be buffering up rows (dynamically, up to
 	// coldata.BatchSize()) before emitting the output batch.
+	// columnarizerBufferingMode 是一种操作模式，在这种模式下，
+	// Columnazer 将在发出输出批次之前缓冲行（动态地，最多 coldata.BatchSize()）。
 	// TODO(jordan): evaluate whether it's more efficient to skip the buffer
 	// phase.
+	// 评估跳过缓冲阶段是否更有效。
 	columnarizerBufferingMode columnarizerMode = iota
 	// columnarizerStreamingMode is the mode of operation in which the
 	// Columnarizer will always emit batches with a single tuple (until it is
 	// done).
+	// columnarizerStreamingMode 是一种操作模式，在这种模式下，
+	// Columnarizer 将始终使用单个元组发出批处理（直到完成）。
 	columnarizerStreamingMode
 )
 
 // Columnarizer turns an execinfra.RowSource input into an Operator output, by
 // reading the input in chunks of size coldata.BatchSize() and converting each
 // chunk into a coldata.Batch column by column.
+// Columnarizer 通过读取大小为 coldata.BatchSize() 的块中的输入并将每个块逐列转换为
+// coldata.Batch，将 execinfra.RowSource 输入转换为 Operator 输出。
 type Columnarizer struct {
 	// Note that we consciously don't embed a colexecop.InitHelper here because
 	// we currently rely on the ProcessorBase to provide the same (and more)
 	// functionality.
+	// 请注意，我们有意不在此处嵌入 colexecop.InitHelper，
+	// 因为我们目前依赖 ProcessorBase 来提供相同（和更多）功能。
 	// TODO(yuzefovich): consider whether embedding ProcessorBaseNoHelper into
 	// the columnarizers makes sense.
+	// 考虑将 ProcessorBaseNoHelper 嵌入列化器是否有意义。
 	execinfra.ProcessorBaseNoHelper
 	colexecop.NonExplainable
 

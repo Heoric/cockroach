@@ -21,6 +21,7 @@ import (
 )
 
 // BuildOpaqueFn is a handler for building the metadata for an opaque statement.
+// BuildOpaqueFn 是用于为不透明语句构建元数据的处理程序。
 type BuildOpaqueFn func(
 	context.Context, *tree.SemaContext, *tree.EvalContext, tree.Statement,
 ) (opt.OpaqueMetadata, error)

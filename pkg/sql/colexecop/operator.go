@@ -23,30 +23,40 @@ import (
 )
 
 // Operator is a column vector operator that produces a Batch as output.
+// Operator 是一个列向量运算符，它产生一个 Batch 作为输出。
 type Operator interface {
 	// Init initializes this operator. It will be called once at operator setup
 	// time. Second, third, etc calls should be noops. If an operator has any
 	// input operators, it's responsible for calling Init on all of those input
 	// operators as well.
+	// Init 初始化这个运算符。 它将在操作员设置时调用一次。 第二、第三等调用应该是 noops。
+	// 如果一个运算符有任何输入运算符，它也负责对所有这些输入运算符调用 Init。
 	//
 	// Canceling the provided context results in forceful termination of
 	// execution. The operators are expected to hold onto the provided context
 	// (and derive a new one if needed) that is then used for Next(),
 	// DrainMeta(), and Close() calls (when applicable).
+	// 取消提供的上下文会强制终止执行。 运算符应保留提供的上下文（并在需要时派生一个新上下文），
+	// 然后将其用于 Next()、DrainMeta() 和 Close() 调用（如果适用）。
 	//
 	// It might panic with an expected error, so there must be a "root"
 	// component that will catch that panic.
+	// 它可能会因预期的错误而恐慌，因此必须有一个“根”组件来捕获该恐慌。
 	Init(ctx context.Context)
 
 	// Next returns the next Batch from this operator. Once the operator is
 	// finished, it will return a Batch with length 0. Subsequent calls to
 	// Next at that point will always return a Batch with length 0.
+	// Next 从该运算符返回下一个 Batch。 运算符完成后，它将返回一个长度为 0 的 Batch。
+	// 此时对 Next 的后续调用将始终返回一个长度为 0 的 Batch。
 	//
 	// Calling Next may invalidate the contents of the last Batch returned by
 	// Next.
+	// 调用 Next 可能会使 Next 返回的最后一个 Batch 的内容无效。
 	//
 	// It might panic with an expected error, so there must be a "root"
 	// component that will catch that panic.
+	// 它可能会因预期的错误而恐慌，因此必须有一个“根”组件来捕获该恐慌。
 	Next() coldata.Batch
 
 	execinfra.OpNode

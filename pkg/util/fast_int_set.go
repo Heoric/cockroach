@@ -25,6 +25,7 @@ import (
 
 // FastIntSet keeps track of a set of integers. It does not perform any
 // allocations when the values are small. It is not thread-safe.
+// FastIntSet 跟踪一组整数。 当值较小时，它不执行任何分配。 它不是线程安全的。
 type FastIntSet struct {
 	small bitmap
 	large *intsets.Sparse

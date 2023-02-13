@@ -1595,15 +1595,24 @@ func shouldDistributeGivenRecAndMode(
 // is reused, but if plan has logical representation (i.e. it is a planNode
 // tree), then we traverse that tree in order to determine the distribution of
 // the plan.
+// getPlanDistribution 返回计划将具有的 PlanDistribution。
+// 如果计划已经有物理表示，那么存储的 PlanDistribution 将被重用，
+// 但如果计划有逻辑表示（即它是一个 planNode 树），那么我们遍历该树以确定计划的分布。
 // WARNING: in some cases when this method returns
 // physicalplan.FullyDistributedPlan, the plan might actually run locally. This
 // is the case when
+// 警告：在某些情况下，当此方法返回时 physicalplan.FullyDistributedPlan，
+// 该计划实际上可能在本地运行。 情况是这样的
 // - the plan ends up with a single flow on the gateway, or
+// - 计划以网关上的单个流结束，或者
 // - during the plan finalization (in DistSQLPlanner.finalizePlanWithRowCount)
+// - 在计划完成期间（在 DistSQLPlanner.finalizePlanWithRowCount 中）
 // we decide that it is beneficial to move the single flow of the plan from the
 // remote node to the gateway.
+// 我们决定将计划的单流从远程节点移动到网关是有益的。
 // TODO(yuzefovich): this will be easy to solve once the DistSQL spec factory is
 // completed but is quite annoying to do at the moment.
+// 一旦 DistSQL 规范工厂完成，这将很容易解决，但目前做起来很烦人
 func getPlanDistribution(
 	ctx context.Context,
 	p *planner,
@@ -1618,6 +1627,7 @@ func getPlanDistribution(
 	// If this transaction has modified or created any types, it is not safe to
 	// distribute due to limitations around leasing descriptors modified in the
 	// current transaction.
+	// 如果此事务已修改或创建任何类型，则由于当前事务中修改的租赁描述符的限制，分发是不安全的。
 	if p.Descriptors().HasUncommittedTypes() {
 		return physicalplan.LocalPlan
 	}
@@ -1630,6 +1640,7 @@ func getPlanDistribution(
 	}
 
 	// Don't try to run empty nodes (e.g. SET commands) with distSQL.
+	// 不要尝试使用 distSQL 运行空节点（例如 SET 命令）。
 	if _, ok := plan.planNode.(*zeroNode); ok {
 		return physicalplan.LocalPlan
 	}

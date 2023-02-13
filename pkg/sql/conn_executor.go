@@ -73,6 +73,7 @@ import (
 // noteworthyMemoryUsageBytes is the minimum size tracked by a
 // transaction or session monitor before the monitor starts explicitly
 // logging overall usage growth in the log.
+// noteworthyMemoryUsageBytes 是事务或会话监视器在监视器开始在日志中显式记录整体使用增长之前跟踪的最小大小。
 var noteworthyMemoryUsageBytes = envutil.EnvOrDefaultInt64("COCKROACH_NOTEWORTHY_SESSION_MEMORY_USAGE", 1024*1024)
 
 // A connExecutor is in charge of executing queries received on a given client
@@ -637,18 +638,24 @@ func (s *Server) GetBytesMonitor() *mon.BytesMonitor {
 }
 
 // SetupConn creates a connExecutor for the client connection.
+// SetupConn 为客户端连接创建一个 connExecutor。
 //
 // When this method returns there are no resources allocated yet that
 // need to be close()d.
+// 当此方法返回时，还没有分配需要 close() 的资源。
 //
 // Args:
 // args: The initial session parameters. They are validated by SetupConn
 //   and an error is returned if this validation fails.
+// args：初始会话参数。 它们由 SetupConn 验证，如果验证失败则返回错误。
 // stmtBuf: The incoming statement for the new connExecutor.
+// stmtBuf：新connExecutor的传入语句。
 // clientComm: The interface through which the new connExecutor is going to
 //   produce results for the client.
+// clientComm：新的 connExecutor 将通过该接口为客户端产生结果。
 // memMetrics: The metrics that statements executed on this connection will
 //   contribute to.
+// memMetrics：在此连接上执行的语句将贡献的指标。
 func (s *Server) SetupConn(
 	ctx context.Context,
 	args SessionArgs,
@@ -661,6 +668,7 @@ func (s *Server) SetupConn(
 	sds := sessiondata.NewStack(sd)
 	// Set the SessionData from args.SessionDefaults. This also validates the
 	// respective values.
+	// 从 args.SessionDefaults 设置 SessionData。 这也验证了相应的值。
 	sdMutIterator := s.makeSessionDataMutatorIterator(sds, args.SessionDefaults)
 	sdMutIterator.onDefaultIntSizeChange = onDefaultIntSizeChange
 	if err := sdMutIterator.applyOnEachMutatorError(func(m sessionDataMutator) error {
@@ -743,9 +751,11 @@ func (h ConnectionHandler) GetQueryCancelKey() pgwirecancel.BackendKeyData {
 
 // ServeConn serves a client connection by reading commands from the stmtBuf
 // embedded in the ConnHandler.
+// ServeConn 通过从嵌入在 ConnHandler 中的 stmtBuf 中读取命令来为客户端连接提供服务。
 //
 // If not nil, reserved represents memory reserved for the connection. The
 // connExecutor takes ownership of this memory.
+// 如果不为 nil，reserved 表示为连接保留的内存。 connExecutor 获取此内存的所有权。
 func (s *Server) ServeConn(
 	ctx context.Context, h ConnectionHandler, reserved mon.BoundAccount, cancel context.CancelFunc,
 ) error {
@@ -1750,17 +1760,23 @@ func (ex *connExecutor) activate(
 // run implements the run loop for a connExecutor. Commands are read one by one
 // from the input buffer; they are executed and the resulting state transitions
 // are performed.
+// run 为 connExecutor 实现运行循环。 从输入缓冲区中一条一条地读取命令； 它们被执行并执行结果状态转换。
 //
 // run returns when either the stmtBuf is closed by someone else or when an
 // error is propagated from query execution. Note that query errors are not
 // propagated as errors to this layer; only things that are supposed to
 // terminate the session are (e.g. client communication errors and ctx
 // cancelations).
+// 当 stmtBuf 被其他人关闭或从查询执行传播错误时，运行返回。
+// 请注意，查询错误不会作为错误传播到该层； 只有应该终止会话的事情是（例如客户端通信错误和 ctx 取消）。
 // run() is expected to react on ctx cancelation, but the caller needs to also
 // close the stmtBuf at the same time as canceling the ctx. If cancelation
 // happens in the middle of a query execution, that's expected to interrupt the
 // execution and generate an error. run() is then supposed to return because the
 // buffer is closed and no further commands can be read.
+// run() 预计会对 ctx 取消做出反应，但调用者还需要在取消 ctx 的同时关闭 stmtBuf。
+// 如果取消发生在查询执行的中间，则预计会中断执行并产生错误。
+// 然后 run() 应该返回，因为缓冲区已关闭并且无法读取更多命令。
 //
 // When this returns, ex.close() needs to be called and  the connection to the
 // client needs to be terminated. If it returns with an error, that error may
@@ -1768,9 +1784,13 @@ func (ex *connExecutor) activate(
 // also have an error from the reading side), or some other unexpected failure.
 // Returned errors have not been communicated to the client: it's up to the
 // caller to do that if it wants.
+// 返回时，需要调用 ex.close() 并终止与客户端的连接。
+// 如果它返回错误，则该错误可能表示通信错误（在这种情况下，连接可能已经从读取端出现错误）
+// 或其他一些意外故障。 返回的错误还没有传达给客户端：如果需要，这取决于调用者。
 //
 // If not nil, reserved represents Memory reserved for the connection. The
 // connExecutor takes ownership of this memory.
+// 如果不为 nil，则 reserved 表示为连接保留的内存。 connExecutor 获取此内存的所有权。
 //
 // onCancel, if not nil, will be called when the SessionRegistry cancels the
 // session. TODO(andrei): This is hooked up to canceling the pgwire connection's
@@ -1784,6 +1804,15 @@ func (ex *connExecutor) activate(
 // from the session registry, might be too costly - the way query cancelation
 // works is that every session is asked to cancel a given query until the right
 // one is found. That seems like a good performance trade-off.
+// onCancel，如果不为 nil，将在 SessionRegistry 取消会话时调用。
+// TODO(andrei)：这与取消 pgwire 连接的上下文相关（其中 ctx 也是一个子节点）。
+// connExecutor 取消更高级别的任务似乎很粗鲁。
+// 更好的设计可能是让 pgwire 拥有 SessionRegistry，
+// 而不是由 sql.Server 拥有——然后 pgwire 会直接取消它自己的任务；
+// 会议也更自然地属于那里。 然而，存在一个问题，因为查询取消（与会话取消相反）
+// 是通过 SessionRegistry 完成的，并且它属于 connExecutor。
+// 引入一个独立于会话注册表的查询注册表可能成本太高——查询取消的工作方式是要求每个会话取消给定的查询，
+// 直到找到正确的查询。 这似乎是一个很好的性能权衡。
 func (ex *connExecutor) run(
 	ctx context.Context,
 	parentMon *mon.BytesMonitor,
@@ -1824,12 +1853,16 @@ var errDrainingComplete = fmt.Errorf("draining done. this is a good time to fini
 // execCmd reads the current command from the stmtBuf and executes it. The
 // transaction state is modified accordingly, and the stmtBuf is advanced or
 // rewinded accordingly.
+// execCmd 从 stmtBuf 中读取当前命令并执行它。 事务状态相应修改，stmtBuf 相应前进或后退。
 //
 // Returns an error if communication of results to the client has failed and the
 // session should be terminated. Returns io.EOF if the stmtBuf has been closed.
 // Returns drainingComplete if the session should finish because draining is
 // complete (i.e. we received a DrainRequest - possibly previously - and the
 // connection is found to be idle).
+// 如果与客户端的结果通信失败并且应该终止会话，则返回错误。
+// 如果 stmtBuf 已关闭，则返回 io.EOF。 如果由于耗尽已完成而应该结束会话，
+// 则返回 drainingComplete（即我们收到了 DrainRequest - 可能之前 - 并且发现连接空闲）。
 func (ex *connExecutor) execCmd() error {
 	ctx := ex.Ctx()
 	cmd, pos, err := ex.stmtBuf.CurCmd()
@@ -1853,6 +1886,7 @@ func (ex *connExecutor) execCmd() error {
 
 		// We use a closure for the body of the execution so as to
 		// guarantee that the full service time is captured below.
+		// 我们对执行主体使用闭包，以保证在下面捕获完整的服务时间。
 		err := func() error {
 			if tcmd.AST == nil {
 				res = ex.clientComm.CreateEmptyQueryResult(pos)
@@ -1879,6 +1913,10 @@ func (ex *connExecutor) execCmd() error {
 			// https://www.postgresql.org/docs/14/protocol-flow.html.
 			// The behavior is configurable, in case users want to preserve the
 			// behavior from v21.2 and earlier.
+			// 在简单协议中，仅当这是批处理中的最后一条语句时才自动提交。
+			// 这符合 Postgres 的行为。
+			// 请参阅 https://www.postgresql.org/docs/14/protocol-flow.html
+			// 上的“单个查询中的多个语句”。 该行为是可配置的，以防用户希望保留 v21.2 及更早版本的行为。
 			implicitTxnForBatch := ex.sessionData().EnableImplicitTransactionForBatchStatements
 			canAutoCommit := ex.implicitTxn() && (tcmd.LastInBatch || !implicitTxnForBatch)
 			ev, payload, err = ex.execStmt(
@@ -1888,10 +1926,12 @@ func (ex *connExecutor) execCmd() error {
 		}()
 		// Note: we write to ex.statsCollector.PhaseTimes, instead of ex.phaseTimes,
 		// because:
+		// 注意：我们写入 ex.statsCollector.PhaseTimes，而不是 ex.phaseTimes，因为：
 		// - stats use ex.statsCollector, not ex.phaseTimes.
 		// - ex.statsCollector merely contains a copy of the times, that
 		//   was created when the statement started executing (via the
 		//   Reset() method).
+		//   ex.statsCollector 仅包含时间的副本，该副本是在语句开始执行时创建的（通过 Reset() 方法）。
 		ex.statsCollector.PhaseTimes().SetSessionPhaseTime(sessionphase.SessionQueryServiced, timeutil.Now())
 		if err != nil {
 			return err
@@ -1900,15 +1940,19 @@ func (ex *connExecutor) execCmd() error {
 	case ExecPortal:
 		// ExecPortal is handled like ExecStmt, except that the placeholder info
 		// is taken from the portal.
+		// ExecPortal 的处理方式与 ExecStmt 类似，只是占位符信息取自门户。
 		ex.phaseTimes.SetSessionPhaseTime(sessionphase.SessionQueryReceived, tcmd.TimeReceived)
 		// When parsing has been done earlier, via a separate parse
 		// message, it is not any more part of the statistics collected
 		// for this execution. In that case, we simply report that
 		// parsing took no time.
+		// 当解析较早完成时，通过单独的解析消息，它不再是为此执行收集的统计信息的一部分。
+		// 在那种情况下，我们只是报告解析没有花费时间。
 		ex.phaseTimes.SetSessionPhaseTime(sessionphase.SessionStartParse, time.Time{})
 		ex.phaseTimes.SetSessionPhaseTime(sessionphase.SessionEndParse, time.Time{})
 		// We use a closure for the body of the execution so as to
 		// guarantee that the full service time is captured below.
+		// 我们对执行主体使用闭包，以保证在下面捕获完整的服务时间。
 		err := func() error {
 			portalName := tcmd.Name
 			portal, ok := ex.extraTxnState.prepStmtsNamespace.portals[portalName]
@@ -1958,6 +2002,10 @@ func (ex *connExecutor) execCmd() error {
 			// received. However, if we are executing a statement that is immediately
 			// followed by Sync (which is the common case), then we still can auto-commit,
 			// which allows the 1PC txn fast path to be used.
+			// 在扩展协议中，并不总是允许自动提交。
+			// postgres 文档说扩展协议中的命令都被视为隐式事务，在收到同步消息之前不会提交。
+			// 然而，如果我们正在执行一个紧跟 Sync 的语句（这是常见的情况），
+			// 那么我们仍然可以自动提交，这允许使用 1PC txn 快速路径。
 			canAutoCommit := ex.implicitTxn() && tcmd.FollowedBySync
 			ev, payload, err = ex.execPortal(ctx, portal, portalName, stmtRes, pinfo, canAutoCommit)
 			return err
@@ -1974,6 +2022,7 @@ func (ex *connExecutor) execCmd() error {
 		}
 		// Update the cmd and pos in the stmtBuf as limitedCommandResult will have
 		// advanced the position if the the portal is repeatedly executed with a limit
+		// 更新 stmtBuf 中的 cmd 和 pos，因为 limitedCommandResult 将在 portal 重复执行限制时提升位置
 		cmd, pos, err = ex.stmtBuf.CurCmd()
 		if err != nil {
 			return err
@@ -2005,22 +2054,32 @@ func (ex *connExecutor) execCmd() error {
 		// inside a BEGIN/COMMIT transaction block (“close” meaning to commit if no
 		// error, or roll back if error)."
 		// In other words, Sync is treated as commit for implicit transactions.
+		// Postgres 文档说：“在每个系列的扩展查询消息完成时，前端应该发出同步消息。
+		// 如果当前事务不在 BEGIN/COMMIT 事务块内，则此无参数消息会导致后端关闭当前事务
+		// （“ close”意思是没有错误就提交，错误就回滚）。
+		// 换句话说，Sync 被视为隐式事务的提交。
 		if ex.implicitTxn() {
 			// Note that the handling of ev in the case of Sync is massaged a bit
 			// later - Sync is special in that, if it encounters an error, that does
 			// *not *cause the session to ignore all commands until the next Sync.
+			// 请注意，在 Sync 的情况下对 ev 的处理稍晚一些 - Sync 的特殊之处在于，
+			// 如果它遇到错误，那不会 *不会 *导致会话忽略所有命令，直到下一个 Sync。
 			ev, payload = ex.handleAutoCommit(ctx, &tree.CommitTransaction{})
 		}
 		// Note that the Sync result will flush results to the network connection.
+		// 请注意，同步结果会将结果刷新到网络连接。
 		res = ex.clientComm.CreateSyncResult(pos)
 		if ex.draining {
 			// If we're draining, check whether this is a good time to finish the
 			// connection. If we're not inside a transaction, we stop processing
 			// now. If we are inside a transaction, we'll check again the next time
 			// a Sync is processed.
+			// 如果我们正在耗尽，请检查这是否是完成连接的好时机。
+			// 如果我们不在交易中，我们现在就停止处理。 如果我们在事务中，我们将在下一次处理同步时再次检查。
 			if ex.idleConn() {
 				// If we're about to close the connection, close res in order to flush
 				// now, as we won't have an opportunity to do it later.
+				// 如果我们要关闭连接，请关闭 res 以立即刷新，因为我们以后没有机会这样做。
 				res.Close(ctx, stateToTxnStatusIndicator(ex.machine.CurState()))
 				return errDrainingComplete
 			}
@@ -2037,6 +2096,8 @@ func (ex *connExecutor) execCmd() error {
 		// transaction. If we are in a transaction, we'll finish as soon as a Sync
 		// command (i.e. the end of a batch) is processed outside of a
 		// transaction.
+		// 我们收到了一个 drain 请求。 如果我们不在交易中，我们会立即终止。
+		// 如果我们在事务中，我们将在事务外处理同步命令（即批处理结束）后立即完成。
 		ex.draining = true
 		res = ex.clientComm.CreateDrainResult(pos)
 		if ex.idleConn() {
@@ -2044,6 +2105,7 @@ func (ex *connExecutor) execCmd() error {
 		}
 	case Flush:
 		// Closing the res will flush the connection's buffer.
+		// 关闭 res 将刷新连接的缓冲区。
 		res = ex.clientComm.CreateFlushResult(pos)
 	default:
 		panic(errors.AssertionFailedf("unsupported command type: %T", cmd))
@@ -2052,6 +2114,7 @@ func (ex *connExecutor) execCmd() error {
 	var advInfo advanceInfo
 
 	// If an event was generated, feed it to the state machine.
+	// 如果生成了事件，则将其提供给状态机。
 	if ev != nil {
 		var err error
 		advInfo, err = ex.txnStateTransitionsApplyWrapper(ev, payload, res, pos)
@@ -2060,6 +2123,7 @@ func (ex *connExecutor) execCmd() error {
 		}
 
 		// Massage the advancing for Sync, which is special.
+		// 为 Sync 按摩前进，这很特别。
 		if _, ok := cmd.(Sync); ok {
 			switch advInfo.code {
 			case skipBatch:
@@ -2067,10 +2131,15 @@ func (ex *connExecutor) execCmd() error {
 				// possible because Sync can trigger a commit). We generate the
 				// ErrorResponse and the ReadyForQuery responses, and we continue with
 				// the next command. From the Postgres docs:
+				// Sync 上的错误不会导致我们跳过命令（错误是可能的，因为 Sync 可以触发提交）。
+				// 我们生成 ErrorResponse 和 ReadyForQuery 响应，然后继续执行下一个命令。
+				// 来自 Postgres 文档：
 				// """
 				// Note that no skipping occurs if an error is detected while processing
 				// Sync — this ensures that there is one and only one ReadyForQuery sent for
 				// each Sync.
+				// 请注意，如果在处理 Sync 时检测到错误，
+				// 则不会发生跳过——这可确保为每个 Sync 发送一个且只有一个 ReadyForQuery。
 				// """
 				advInfo = advanceInfo{code: advanceOne}
 			case advanceOne:
@@ -2083,18 +2152,23 @@ func (ex *connExecutor) execCmd() error {
 		// If a txn just started, we henceforth want to run in the context of the
 		// transaction. Similarly, if a txn just ended, we don't want to run in its
 		// context any more.
+		// 如果 txn 刚刚开始，我们此后希望在事务的上下文中运行。
+		// 同样，如果一个 txn 刚刚结束，我们不想再在它的上下文中运行。
 		ctx = ex.Ctx()
 	} else {
 		// If no event was generated synthesize an advance code.
+		// 如果没有生成事件，则合成一个advance code。
 		advInfo = advanceInfo{code: advanceOne}
 	}
 
 	// Decide if we need to close the result or not. We don't need to do it if
 	// we're staying in place or rewinding - the statement will be executed
 	// again.
+	// 决定我们是否需要关闭结果。 如果我们留在原地或倒带，我们不需要这样做 - 语句将再次执行。
 	if advInfo.code != stayInPlace && advInfo.code != rewind {
 		// Close the result. In case of an execution error, the result might have
 		// its error set already or it might not.
+		// 关闭结果。 在执行错误的情况下，结果可能已经设置了错误，也可能没有。
 		resErr := res.Err()
 
 		pe, ok := payload.(payloadWithError)
@@ -2110,6 +2184,7 @@ func (ex *connExecutor) execCmd() error {
 	}
 
 	// Move the cursor according to what the state transition told us to do.
+	// 根据状态转换告诉我们做什么来移动光标。
 	switch advInfo.code {
 	case advanceOne:
 		ex.stmtBuf.AdvanceOne()
@@ -2121,6 +2196,11 @@ func (ex *connExecutor) execCmd() error {
 		// command and only sends Syncs once it received some data. But we ignore
 		// flush commands (just like we ignore any other commands) when skipping
 		// to the next batch.
+		// 我们将刷新我们对网络的任何结果。 最后一个一定是错误的。
+		// 这种刷新似乎是不必要的，因为我们通常只在客户端通过 Sync 或 Flush 请求它时才刷新，
+		// 但如果没有它，Node.js 驱动程序会不高兴。 该驱动程序喜欢发送“刷新”命令，
+		// 并且仅在收到一些数据后才发送同步。
+		// 但是我们在跳到下一批时忽略刷新命令（就像我们忽略任何其他命令一样）。
 		if err := ex.clientComm.Flush(pos); err != nil {
 			return err
 		}
@@ -2134,6 +2214,7 @@ func (ex *connExecutor) execCmd() error {
 		ex.extraTxnState.savepoints = ex.extraTxnState.rewindPosSnapshot.savepoints
 		// Note we use the Replace function instead of reassigning, as there are
 		// copies of the ex.sessionDataStack in the iterators and extendedEvalContext.
+		// 注意我们使用替换函数而不是重新分配，因为在迭代器和 extendedEvalContext 中有 ex.sessionDataStack 的副本。
 		ex.sessionDataStack.Replace(ex.extraTxnState.rewindPosSnapshot.sessionDataStack)
 		advInfo.rewCap.rewindAndUnlock(ctx)
 	case stayInPlace:
@@ -2148,6 +2229,7 @@ func (ex *connExecutor) execCmd() error {
 
 	if rewindCapability, canRewind := ex.getRewindTxnCapability(); !canRewind {
 		// Trim statements that cannot be retried to reclaim memory.
+		// Trim 不能重试的语句来回收内存。
 		ex.stmtBuf.Ltrim(ctx, pos)
 	} else {
 		rewindCapability.close()
@@ -2469,6 +2551,9 @@ func (ex *connExecutor) rewindPrepStmtNamespace(ctx context.Context) error {
 // rewindCapability bound to that position. The returned bool is true if the
 // rewind is possible. If it is, client communication is blocked until the
 // rewindCapability is exercised.
+// getRewindTxnCapability 检查是否可以倒带到之前通过 setTxnRewindPos() 设置的位置，
+// 如果可以，则返回绑定到该位置的 rewindCapability。 如果可以倒带，则返回的 bool 为真。
+// 如果是，则在执行 rewindCapability 之前，客户端通信将被阻止。
 func (ex *connExecutor) getRewindTxnCapability() (rewindCapability, bool) {
 	cl := ex.clientComm.LockCommunication()
 
@@ -2503,12 +2588,17 @@ func errIsRetriable(err error) bool {
 
 // makeErrEvent takes an error and returns either an eventRetriableErr or an
 // eventNonRetriableErr, depending on the error type.
+// makeErrEvent 接受错误并返回 eventRetriableErr 或 eventNonRetriableErr，具体取决于错误类型。
 func (ex *connExecutor) makeErrEvent(err error, stmt tree.Statement) (fsm.Event, fsm.EventPayload) {
 	// Check for MinTimestampBoundUnsatisfiableError errors.
 	// If this is detected, it means we are potentially able to retry with a lower
 	// MaxTimestampBound set if our MinTimestampBound was bumped up from the
 	// original AS OF SYSTEM TIME timestamp set due to a schema bumping the
 	// timestamp to a higher value.
+	// 检查 MinTimestampBoundUnsatisfiableError 错误。
+	// 如果检测到这一点，这意味着如果我们的 MinTimestampBound
+	// 由于模式将时间戳撞到更高的值而从原始的 AS OF SYSTEM TIME 时间戳设置提高，
+	// 我们可能能够使用较低的 MaxTimestampBound 设置重试。
 	if minTSErr := (*roachpb.MinTimestampBoundUnsatisfiableError)(nil); errors.As(err, &minTSErr) {
 		aost := ex.planner.EvalContext().AsOfSystemTime
 		if aost != nil && aost.BoundedStaleness {
@@ -2516,6 +2606,8 @@ func (ex *connExecutor) makeErrEvent(err error, stmt tree.Statement) (fsm.Event,
 				// If this occurs, we have a strange logic bug where we resolved
 				// a minimum timestamp during a bounded staleness read to be greater
 				// than or equal to the maximum staleness bound we put up.
+				// 如果发生这种情况，我们会遇到一个奇怪的逻辑错误，
+				// 我们将有界陈旧读取期间的最小时间戳解决为大于或等于我们设置的最大陈旧界限。
 				err = errors.CombineErrors(
 					errors.AssertionFailedf(
 						"unexpected MaxTimestampBound >= txn MinTimestampBound: %s >= %s",
@@ -2983,11 +3075,14 @@ func (ex *connExecutor) handleWaitingForConcurrentSchemaChanges(
 }
 
 // initStatementResult initializes res according to a query.
+// initStatementResult 根据查询初始化 res。
 //
 // cols represents the columns of the result rows. Should be nil if
 // stmt.AST.StatementReturnType() != tree.Rows.
+// cols 表示结果行的列。 如果 stmt.AST.StatementReturnType() != tree.Rows 应该为 nil。
 //
 // If an error is returned, it is to be considered a query execution error.
+// 如果返回错误，则认为是查询执行错误。
 func (ex *connExecutor) initStatementResult(
 	ctx context.Context, res RestrictedCommandResult, ast tree.Statement, cols colinfo.ResultColumns,
 ) error {

@@ -27,6 +27,7 @@ import (
 
 // analyzeOrderBy analyzes an Ordering physical property from the ORDER BY
 // clause and adds the resulting typed expressions to orderByScope.
+// analyzeOrderBy 分析 ORDER BY 子句中的排序物理属性，并将生成的类型化表达式添加到 orderByScope。
 func (b *Builder) analyzeOrderBy(
 	orderBy tree.OrderBy, inScope, projectionsScope *scope, rejectFlags tree.SemaRejectFlags,
 ) (orderByScope *scope) {
@@ -124,6 +125,7 @@ func (b *Builder) addOrderByOrDistinctOnColumn(
 
 // analyzeOrderByIndex appends to the orderByScope a column for each indexed
 // column in the specified index, including the implicit primary key columns.
+// analyzeOrderByIndex 为指定索引中的每个索引列（包括隐式主键列）向 orderByScope 添加一列。
 func (b *Builder) analyzeOrderByIndex(order *tree.Order, inScope, orderByScope *scope) {
 	tab, tn := b.resolveTable(&order.Table, privilege.SELECT)
 	index, err := b.findIndexByName(tab, order.Index)
@@ -133,13 +135,16 @@ func (b *Builder) analyzeOrderByIndex(order *tree.Order, inScope, orderByScope *
 
 	// We fully qualify the table name in case another table expression was
 	// aliased to the same name as an existing table.
+	// 我们完全限定表名，以防另一个表表达式别名为与现有表相同的名称。
 	tn.ExplicitCatalog = true
 	tn.ExplicitSchema = true
 
 	// Append each key column from the index (including the implicit primary key
 	// columns) to the ordering scope.
+	// 将索引中的每个键列（包括隐式主键列）附加到排序范围。
 	for i, n := 0, index.KeyColumnCount(); i < n; i++ {
 		// Columns which are indexable are always orderable.
+		// 可索引的列总是可排序的。
 		col := index.Column(i)
 		desc := col.Descending
 
@@ -158,6 +163,9 @@ func (b *Builder) analyzeOrderByIndex(order *tree.Order, inScope, orderByScope *
 // analyzeOrderByArg analyzes a single ORDER BY argument. Typically this is a
 // single column, with the exception of qualified star "table.*". The resulting
 // typed expression(s) are added to orderByScope.
+// analyzeOrderByArg 分析单个 ORDER BY 参数。
+// 通常这是一个单一的列，除了合格的星号“table.*”。
+// 生成的类型化表达式被添加到 orderByScope。
 func (b *Builder) analyzeOrderByArg(
 	order *tree.Order, inScope, projectionsScope, orderByScope *scope,
 ) {
@@ -168,6 +176,8 @@ func (b *Builder) analyzeOrderByArg(
 
 	// Set NULL order. The default order in Cockroach if null_ordered_last=False
 	// is nulls first for ascending order and nulls last for descending order.
+	// 设置 NULL 顺序。 如果 null_ordered_last=False，
+	// Cockroach 中的默认顺序是升序为空，降序为空。
 	nullsDefaultOrder := true
 	if (b.evalCtx.SessionData().NullOrderedLast && order.NullsOrder == tree.DefaultNullsOrder) ||
 		(order.NullsOrder != tree.DefaultNullsOrder &&
@@ -207,16 +217,25 @@ func (b *Builder) buildOrderByArg(
 // nullsDefaultOrder bool determines whether an extra ordering column is
 // required to explicitly place nulls first or nulls last (when
 // nullsDefaultOrder is false).
+// analyzeExtraArgument 分析单个 ORDER BY 或 DISTINCT ON 参数。
+// 通常这是一个单一的列，除了合格的星（表。*）。
+// 生成的类型化表达式被添加到 extraColsScope。
+// nullsDefaultOrder bool 确定是否需要额外的排序列来明确地将空值放在最前面或最后
+// （当 nullsDefaultOrder 为 false 时）。
 func (b *Builder) analyzeExtraArgument(
 	expr tree.Expr, inScope, projectionsScope, extraColsScope *scope, nullsDefaultOrder bool,
 ) {
 	// Unwrap parenthesized expressions like "((a))" to "a".
+	// 将带括号的表达式如 "((a))" 解包为 "a"。
 	expr = tree.StripParens(expr)
 
 	// The logical data source for ORDER BY or DISTINCT ON is the list of column
 	// expressions for a SELECT, as specified in the input SQL text (or an entire
 	// UNION or VALUES clause).  Alas, SQL has some historical baggage from SQL92
 	// and there are some special cases:
+	// ORDER BY 或 DISTINCT ON 的逻辑数据源是 SELECT 的列表达式列表，
+	// 如输入 SQL 文本（或整个 UNION 或 VALUES 子句）中所指定。
+	// 唉，SQL 有一些来自 SQL92 的历史包袱，还有一些特殊情况：
 	//
 	// SQL92 rules:
 	//
@@ -225,12 +244,16 @@ func (b *Builder) analyzeExtraArgument(
 	//    expression as sort key.
 	//    e.g. SELECT a AS b, b AS c ORDER BY b
 	//    this sorts on the first column.
+	//    如果表达式是 SELECT 子句中表达式的别名 (AS)，则使用该表达式作为排序键。
+	//    例如 SELECT a AS b, b AS c ORDER BY b 这在第一列上排序。
 	//
 	// 2) column ordinals. If a simple integer literal is used,
 	//    optionally enclosed within parentheses but *not subject to
 	//    any arithmetic*, then this refers to one of the columns of
 	//    the data source. Then use the SELECT expression at that
 	//    ordinal position as sort key.
+	//    列序数。 如果使用简单的整数文字，可选地括在括号中但*不受任何算术限制*，
+	//    那么这指的是数据源的列之一。 然后使用该序号位置的 SELECT 表达式作为排序关键字。
 	//
 	// SQL99 rules:
 	//
@@ -239,20 +262,27 @@ func (b *Builder) analyzeExtraArgument(
 	//    e.g. SELECT b AS c ORDER BY b
 	//    this sorts on the first column.
 	//    (this is an optimization)
+	//    否则，如果表达式已经在 SELECT 列表中，则使用该表达式作为排序关键字。
+	//    例如 SELECT b AS c ORDER BY b 这在第一列上排序。 （这是一个优化）
 	//
 	// 4) if the sort key is not dependent on the data source (no
 	//    IndexedVar) then simply do not sort. (this is an optimization)
+	//    如果排序键不依赖于数据源（无 IndexedVar），则不进行排序。 （这是一个优化）
 	//
 	// 5) otherwise, add a new projection with the ORDER BY expression
 	//    and use that as sort key.
 	//    e.g. SELECT a FROM t ORDER by b
 	//    e.g. SELECT a, b FROM t ORDER by a+b
+	//    否则，使用 ORDER BY 表达式添加一个新投影并将其用作排序键。
+	//    例如 SELECT a FROM t ORDER by b
+	//    例如 SELECT a, b FROM t ORDER by a+b
 
 	// First, deal with projection aliases.
 	idx := colIdxByProjectionAlias(expr, inScope.context.String(), projectionsScope)
 
 	// If the expression does not refer to an alias, deal with
 	// column ordinals.
+	// 如果表达式不引用别名，则处理列序号。
 	if idx == -1 {
 		idx = colIndex(len(projectionsScope.cols), expr, inScope.context.String())
 	}

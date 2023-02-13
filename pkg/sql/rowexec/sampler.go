@@ -35,6 +35,7 @@ import (
 )
 
 // sketchInfo contains the specification and run-time state for each sketch.
+// sketchInfo 包含每个草图的规范和运行时状态。
 type sketchInfo struct {
 	spec     execinfrapb.SketchSpec
 	sketch   *hyperloglog.Sketch
@@ -46,6 +47,8 @@ type sketchInfo struct {
 // A sampler processor returns a random sample of rows, as well as "global"
 // statistics (including cardinality estimation sketch data). See SamplerSpec
 // for more details.
+// 采样器处理器返回行的随机样本，以及“全局”统计信息（包括基数估计草图数据）。
+// 有关详细信息，请参阅 SamplerSpec。
 type samplerProcessor struct {
 	execinfra.ProcessorBase
 

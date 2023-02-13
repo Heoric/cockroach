@@ -22,6 +22,8 @@ import (
 // FastIntMap is a replacement for map[int]int which is more efficient when both
 // keys and values are small. It can be passed by value (but Copy must be used
 // for independent modification of copies).
+// FastIntMap 是 map[int]int 的替代品，它在键和值都很小时更高效。
+// 可以按值传递（但必须使用Copy来独立修改副本）。
 type FastIntMap struct {
 	small [numWords]uint64
 	large map[int]int
@@ -200,6 +202,7 @@ func (m FastIntMap) ForEach(fn func(key, val int)) {
 
 // ContentsIntoBuffer writes the contents of the map into the provided buffer in
 // the following format:
+// ContentsIntoBuffer 按照以下格式将 map 的内容写入提供的缓冲区：
 //   key1:val1 key2:val2 ...
 // The keys are in ascending order.
 func (m FastIntMap) ContentsIntoBuffer(buf *bytes.Buffer) {
@@ -244,6 +247,8 @@ func (m FastIntMap) String() string {
 // These constants determine the "small" representation: we pack <numVals>
 // values of <numBits> bits into <numWords> 64-bit words. Each value is 0 if the
 // corresponding key is not set, otherwise it is the value+1.
+// 这些常量决定了“小”表示：我们将 <numVals> 位的 <numBits> 值打包成 <numWords> 64 位字。
+// 如果没有设置相应的键，则每个值都为0，否则为值+1。
 //
 // It's desirable for efficiency that numBits, numValsPerWord are powers of two.
 //

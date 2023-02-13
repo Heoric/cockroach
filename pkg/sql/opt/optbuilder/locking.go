@@ -100,6 +100,9 @@ func (lm *lockingSpec) apply(locking tree.LockingClause) {
 // resulting spec will remain un-set. If a matching locking mode for the table
 // is found then the resulting spec will contain exclusively that locking mode
 // and will no longer be restricted to specific target relations.
+// 过滤器返回指定表所需的行级锁定模式作为新的合并锁定规范。
+// 如果未找到匹配的锁定模式，则生成的规范将保持未设置状态。
+// 如果找到表的匹配锁定模式，则生成的规范将只包含该锁定模式，并且不再局限于特定的目标关系。
 func (lm lockingSpec) filter(alias tree.Name) lockingSpec {
 	var ret lockingSpec
 	var copied bool

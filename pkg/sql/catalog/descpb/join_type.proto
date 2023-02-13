@@ -22,22 +22,27 @@ enum JoinType {
 
   // A left semi join returns the rows from the left side that match at least
   // one row from the right side (as per equality columns and ON condition).
+  // 左半连接返回左侧的行，这些行与右侧的至少一行匹配（根据相等列和 ON 条件）。
   LEFT_SEMI = 4;
 
   // A left anti join is an "inverted" left semi join: it returns the rows from
   // the left side that don't match any rows on the right side (as per equality
   // columns and ON condition).
+  // 左反连接是“反向”左半连接：它从左侧返回与右侧任何行都不匹配的行（根据相等列和 ON 条件）。
   LEFT_ANTI = 5;
 
   // INTERSECT_ALL is a special join-like operation that is only used for
   // INTERSECT ALL and INTERSECT operations.
+  // INTERSECT_ALL 是一种特殊的类似连接的操作，仅用于 INTERSECT ALL 和 INTERSECT 操作。
   //
   // It is similar to a left semi join, except that if there are multiple left
   // rows that have the same values on the equality columns, only as many of
   // those are returned as there are matches on the right side.
+  // 它类似于左半连接，不同之处在于如果有多个左侧行在相等列上具有相同的值，则只返回与右侧匹配项一样多的行。
   //
   // In practice, there is a one-to-one mapping between the left and right
   // columns (they are all equality columns).
+  // 在实践中，左右列之间存在一对一的映射（它们都是相等的列）。
   //
   // For example: 
   //
@@ -52,13 +57,16 @@ enum JoinType {
 
   // EXCEPT_ALL is a special join-like operation that is only used for EXCEPT
   // ALL and EXCEPT operations.
+  // EXCEPT_ALL 是一种特殊的类似连接的操作，仅用于 EXCEPT ALL 和 EXCEPT 操作。
   //
   // It is similar to a left anti join, except that if there are multiple left
   // rows that have the same values on the equality columns, only as many of
   // those are removed as there are matches on the right side.
+  // 它类似于左反连接，不同之处在于如果有多个左行在相等列上具有相同的值，则只删除与右侧匹配的行一样多的行。
   //
   // In practice, there is a one-to-one mapping between the left and right
   // columns (they are all equality columns).
+  // 在实践中，左右列之间存在一对一的映射（它们都是相等的列）。
   //
   // For example: 
   //

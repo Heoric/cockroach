@@ -73,6 +73,10 @@ type Index interface {
 	// set of key columns, regardless of how it was defined, because Cockroach
 	// will implicitly add primary key columns to any index which would not
 	// otherwise have a key, like when:
+	// KeyColumnCount 返回索引中作为其唯一键一部分的列数。
+	// 索引中没有两行的这些列具有相同的值（其中 NULL 值被视为相等）。
+	// 每个索引都有一组键列，不管它是如何定义的，
+	// 因为 Cockroach 会隐式地将主键列添加到任何没有键的索引中，例如：
 	//
 	//   1. Index was not declared as UNIQUE.
 	//   2. Index was UNIQUE, but one or more columns have NULL values.

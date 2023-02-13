@@ -35,6 +35,9 @@ import (
 // scanOp operator. Joins will result in the construction of several groups,
 // including two for the left and right table scans, at least one for the join
 // condition, and one for the join itself.
+// buildDataSource 构建一组表示给定表表达式的备忘录组。
+// 例如，如果 tree.TableExpr 由单个表组成，则生成的一组备忘录组将由具有 scanOp 运算符的单个组组成。
+// Join会导致构建若干组，其中左右表扫描各两组，join条件至少一组，join本身一组。
 //
 // See Builder.buildStmt for a description of the remaining input and
 // return values.
@@ -328,17 +331,22 @@ func (b *Builder) renameSource(as tree.AliasClause, scope *scope) {
 		// function with just one column, and the AS clause doesn't specify column
 		// names, then use the specified table name both as the column name and
 		// table name.
+		// Postgres 兼容性的特殊情况：如果数据源当前没有名称，
+		// 并且它是一个集合生成函数或只有一列的标量函数，并且 AS 子句没有指定列名称，
+		// 则使用 指定表名作为列名和表名。
 		noColNameSpecified := len(colAlias) == 0
 		if scope.isAnonymousTable() && noColNameSpecified && scope.singleSRFColumn {
 			colAlias = tree.NameList{as.Alias}
 		}
 
 		// If an alias was specified, use that to qualify the column names.
+		// 如果指定了别名，请使用它来限定列名。
 		tableAlias := tree.MakeUnqualifiedTableName(as.Alias)
 		scope.setTableAlias(as.Alias)
 
 		// If input expression is a ScanExpr, then override metadata aliases for
 		// pretty-printing.
+		// 如果输入表达式是 ScanExpr，则覆盖元数据别名以进行漂亮打印。
 		scan, isScan := scope.expr.(*memo.ScanExpr)
 		if isScan {
 			tabMeta := b.factory.Metadata().TableMeta(scan.ScanPrivate.Table)
@@ -412,6 +420,7 @@ func (b *Builder) buildScanFromTableRef(
 // addTable adds a table to the metadata and returns the TableMeta. The table
 // name is passed separately in order to preserve knowledge of whether the
 // catalog and schema names were explicitly specified.
+// addTable 向元数据中添加一个表并返回 TableMeta。 单独传递表名是为了了解目录和架构名称是否已明确指定。
 func (b *Builder) addTable(tab cat.Table, alias *tree.TableName) *opt.TableMeta {
 	md := b.factory.Metadata()
 	tabID := md.AddTable(tab, alias)
@@ -421,22 +430,31 @@ func (b *Builder) addTable(tab cat.Table, alias *tree.TableName) *opt.TableMeta 
 // buildScan builds a memo group for a ScanOp expression on the given table. If
 // the ordinals list contains any VirtualComputed columns, a ProjectOp is built
 // on top.
+// buildScan 为给定表上的 ScanOp 表达式构建一个备忘录组。
+// 如果序号列表包含任何 VirtualComputed 列，则在其上构建一个 ProjectOp。
 //
 // The resulting scope and expression output the given table ordinals. If an
 // ordinal is for a VirtualComputed column, the ordinals it depends on must also
 // be in the list (in practice, this coincides with all "ordinary" table columns
 // being in the list).
+// 结果范围和表达式输出给定的表序号。 如果序号用于 VirtualComputed 列，
+// 则它所依赖的序号也必须在列表中（实际上，这与列表中的所有“普通”表列一致）。
 //
 // If scanMutationCols is true, then include columns being added or dropped from
 // the table. These are currently required by the execution engine as "fetch
 // columns", when performing mutation DML statements (INSERT, UPDATE, UPSERT,
 // DELETE).
+// 如果 scanMutationCols 为真，则包括从表中添加或删除的列。
+// 在执行突变 DML 语句（INSERT、UPDATE、UPSERT、DELETE）时，执行引擎当前需要这些作为“获取列”。
 //
 // NOTE: Callers must take care that mutation columns (columns that are being
 //       added or dropped from the table) are only used when performing mutation
 //       DML statements (INSERT, UPDATE, UPSERT, DELETE). They cannot be used in
 //       any other way because they may not have been initialized yet by the
 //       backfiller!
+// 注意：调用者必须注意突变列（从表中添加或删除的列）
+//      仅在执行突变 DML 语句（INSERT、UPDATE、UPSERT、DELETE）时使用。
+//      它们不能以任何其他方式使用，因为它们可能尚未被回填程序初始化！
 //
 // See Builder.buildStmt for a description of the remaining input and return
 // values.
@@ -595,6 +613,7 @@ func (b *Builder) buildScan(
 
 	// Add the partial indexes after constructing the scan so we can use the
 	// logical properties of the scan to fully normalize the index predicates.
+	// 在构建扫描后添加部分索引，这样我们就可以使用扫描的逻辑属性来完全规范化索引谓词。
 	b.addPartialIndexPredicatesForTable(tabMeta, outScope.expr)
 
 	if !virtualColIDs.Empty() {
@@ -602,6 +621,8 @@ func (b *Builder) buildScan(
 		// scanned columns).
 		// TODO(radu): we don't currently support virtual columns depending on other
 		// virtual columns.
+		// 投影虚拟列的表达式（并传递所有扫描的列）。
+		// TODO(radu)：我们目前不支持依赖于其他虚拟列的虚拟列。
 		proj := make(memo.ProjectionsExpr, 0, virtualColIDs.Len())
 		virtualColIDs.ForEach(func(col opt.ColumnID) {
 			item := b.factory.ConstructProjectionsItem(tabMeta.ComputedCols[col], col)
@@ -634,15 +655,21 @@ func (b *Builder) buildScan(
 // apply to the table and adds them to the table metadata (see
 // TableMeta.Constraints). To do this, the scalar expressions of the check
 // constraints are built here.
+// addCheckConstraintsForTable 从应用于表的检查约束中提取过滤器，
+// 并将它们添加到表元数据中（请参阅 TableMeta.Constraints）。 为此，这里构建了检查约束的标量表达式。
 //
 // These expressions are used as "known truths" about table data; as such they
 // can only contain immutable operators.
+// 这些表达式用作表数据的“已知事实”； 因此它们只能包含不可变的运算符。
 func (b *Builder) addCheckConstraintsForTable(tabMeta *opt.TableMeta) {
 	// Columns of a user defined type have a constraint to ensure
 	// enum values for that column belong to the UDT. We do not want to
 	// track view deps here, or else a view depending on a table with a
 	// column that is a UDT will result in a type dependency being added
 	// between the view and the UDT, even if the view does not use that column.
+	// 用户定义类型的列有一个约束，以确保该列的枚举值属于 UDT。
+	// 我们不想在这里跟踪视图 deps，否则视图依赖于具有 UDT 列的表将导致在视图和 UDT
+	// 之间添加类型依赖性，即使视图不使用该列也是如此。
 	if b.trackViewDeps {
 		b.trackViewDeps = false
 		defer func() {
@@ -717,6 +744,8 @@ func (b *Builder) addCheckConstraintsForTable(tabMeta *opt.TableMeta) {
 // caches them in the table metadata as scalar expressions. These expressions
 // are used as "known truths" about table data. Any columns for which the
 // expression contains non-immutable operators are omitted.
+// addComputedColsForTable 查找给定表中的所有计算列并将它们作为标量表达式缓存在表元数据中。
+// 这些表达式用作表数据的“已知事实”。 省略表达式包含非不可变运算符的任何列。
 func (b *Builder) addComputedColsForTable(tabMeta *opt.TableMeta) {
 	// We do not want to track view deps here, otherwise a view depending
 	// on a table with a computed column of a UDT will result in a
@@ -967,6 +996,9 @@ func (b *Builder) buildSelectStmtWithoutParens(
 // select clause in order to handle ORDER BY scoping rules. ORDER BY can sort
 // results using columns from the FROM/GROUP BY clause and/or from the
 // projection list.
+// buildSelectClause 构建一组代表给定选择子句的 memo groups。
+// 我们传递整个 select 语句，而不仅仅是 select 子句，以便处理 ORDER BY 范围规则。
+// ORDER BY 可以使用 FROM/GROUP BY 子句和/或投影列表中的列对结果进行排序。
 //
 // See Builder.buildStmt for a description of the remaining input and
 // return values.
@@ -977,8 +1009,10 @@ func (b *Builder) buildSelectClause(
 	desiredTypes []*types.T,
 	inScope *scope,
 ) (outScope *scope) {
+	// fromScope 添加上表对列从 from 表中。
 	fromScope := b.buildFrom(sel.From, locking, inScope)
 
+	//
 	b.processWindowDefs(sel, fromScope)
 	b.buildWhere(sel.Where, fromScope)
 
@@ -988,10 +1022,15 @@ func (b *Builder) buildSelectClause(
 	// function that refers to variables in fromScope or an ancestor scope,
 	// buildAggregateFunction is called which adds columns to the appropriate
 	// aggInScope and aggOutScope.
+	// 这就是魔法发生的地方。 当此调用到达引用 fromScope 或祖先 scope 中的变量的聚合函数时，
+	// 将调用 buildAggregateFunction，它将列添加到适当的 aggInScope 和 aggOutScope。
+	// 将 select c1 ... from t，中的投影列添加到 projectionsScope
+	// scope 的 resolveType 会将 未解析的表达式转换为解析过的，然后添加。
 	b.analyzeProjectionList(sel.Exprs, desiredTypes, fromScope, projectionsScope)
 
 	// Any aggregates in the HAVING, ORDER BY and DISTINCT ON clauses (if they
 	// exist) will be added here.
+	// HAVING、ORDER BY 和 DISTINCT ON 子句中的任何聚合（如果存在）都将添加到此处。
 	havingExpr := b.analyzeHaving(sel.Having, fromScope)
 	orderByScope := b.analyzeOrderBy(orderBy, fromScope, projectionsScope, tree.RejectGenerators)
 	distinctOnScope := b.analyzeDistinctOnArgs(sel.DistinctOn, fromScope, projectionsScope)
@@ -1002,6 +1041,8 @@ func (b *Builder) buildSelectClause(
 		// Grouping columns must be built before building the projection list so
 		// we can check that any column references that appear in the SELECT list
 		// outside of aggregate functions are present in the grouping list.
+		// 必须在构建投影列表之前构建列分组，以便我们可以检查在聚合函数之外的 SELECT
+		// 列表中出现的任何列引用是否存在于分组列表中。
 		b.buildGroupingColumns(sel, projectionsScope, fromScope)
 		having = b.buildHaving(havingExpr, fromScope)
 	}
@@ -1015,6 +1056,8 @@ func (b *Builder) buildSelectClause(
 		// We must wait to build the aggregation until after the above block since
 		// any SRFs found in the SELECT list will change the FROM scope (they
 		// create an implicit lateral join).
+		// 我们必须等到上述块之后才构建聚合，因为在 SELECT 列表中找到的任何 SRF
+		// 都会更改 FROM 范围（它们会创建隐式横向连接）。
 		outScope = b.buildAggregation(having, fromScope)
 	} else {
 		outScope = fromScope
@@ -1043,14 +1086,19 @@ func (b *Builder) buildSelectClause(
 }
 
 // buildFrom builds a set of memo groups that represent the given FROM clause.
+// buildFrom 构建一组代表给定 FROM 子句的备忘录组。
 //
 // See Builder.buildStmt for a description of the remaining input and return
 // values.
+// 请参阅 Builder.buildStmt 了解其余输入和返回值的说明。
 func (b *Builder) buildFrom(from tree.From, locking lockingSpec, inScope *scope) (outScope *scope) {
 	// The root AS OF clause is recognized and handled by the executor. The only
 	// thing that must be done at this point is to ensure that if any timestamps
 	// are specified, the root SELECT was an AS OF SYSTEM TIME and that the time
 	// specified matches the one found at the root.
+	// 根 AS OF 子句被执行者识别和处理。
+	// 此时必须做的唯一一件事是确保是否指定了任何时间戳，
+	// 则根 SELECT 是一个 AS OF SYSTEM TIME，并且指定的时间与在根中找到的时间相匹配。
 	if from.AsOf.Expr != nil {
 		b.validateAsOf(from.AsOf)
 	}
@@ -1070,6 +1118,9 @@ func (b *Builder) buildFrom(from tree.From, locking lockingSpec, inScope *scope)
 
 // processWindowDefs validates that any window defs have unique names and adds
 // them to the given scope.
+// processWindowDefs 验证任何窗口 def 是否具有唯一名称并将它们添加到给定范围。
+//
+// SELECT avg(k) OVER w FROM kv WINDOW w AS (PARTITION BY v ORDER BY w) ORDER BY 1
 func (b *Builder) processWindowDefs(sel *tree.SelectClause, fromScope *scope) {
 	// Just do an O(n^2) loop since the number of window defs is likely small.
 	for i := range sel.Window {
@@ -1090,6 +1141,7 @@ func (b *Builder) processWindowDefs(sel *tree.SelectClause, fromScope *scope) {
 }
 
 // buildWhere builds a set of memo groups that represent the given WHERE clause.
+// buildWhere 构建一组表示给定 WHERE 子句的备忘录组。
 //
 // See Builder.buildStmt for a description of the remaining input and return
 // values.
@@ -1115,6 +1167,7 @@ func (b *Builder) buildWhere(where *tree.Where, inScope *scope) {
 
 // buildFromTables builds a series of InnerJoin expressions that together
 // represent the given FROM tables.
+// buildFromTables 构建一系列 InnerJoin 表达式，它们共同表示给定的 FROM 表。
 //
 // See Builder.buildStmt for a description of the remaining input and
 // return values.
@@ -1123,6 +1176,7 @@ func (b *Builder) buildFromTables(
 ) (outScope *scope) {
 	// If there are any lateral data sources, we need to build the join tree
 	// left-deep instead of right-deep.
+	// 如果有任何横向数据源，我们需要构建左深而不是右深的连接树。
 	for i := range tables {
 		if b.exprIsLateral(tables[i]) {
 			telemetry.Inc(sqltelemetry.LateralJoinUseCounter)
@@ -1136,6 +1190,8 @@ func (b *Builder) buildFromTables(
 // expressions that join together the given FROM tables. The tables are joined
 // in the reverse order that they appear in the list, with the innermost join
 // involving the tables at the end of the list. For example:
+// buildFromTablesRightDeep 递归地构建一系列将给定的 FROM 表连接在一起的 InnerJoin 表达式。
+// 表以它们在列表中出现的相反顺序连接，最内层的连接涉及列表末尾的表。 例如：
 //
 //   SELECT * FROM a,b,c
 //
@@ -1146,6 +1202,7 @@ func (b *Builder) buildFromTables(
 // This ordering is guaranteed for queries not involving lateral joins for the
 // time being, to ensure we don't break any queries which have been
 // hand-optimized.
+// 对于暂时不涉及横向连接的查询，此顺序是有保证的，以确保我们不会破坏任何已手动优化的查询。
 //
 // See Builder.buildStmt for a description of the remaining input and
 // return values.
@@ -1228,6 +1285,7 @@ func (b *Builder) buildFromWithLateral(
 
 // validateAsOf ensures that any AS OF SYSTEM TIME timestamp is consistent with
 // that of the root statement.
+// validateAsOf 确保任何 AS OF SYSTEM TIME 时间戳与根语句的时间戳一致。
 func (b *Builder) validateAsOf(asOfClause tree.AsOfClause) {
 	asOf, err := tree.EvalAsOfTimestamp(
 		b.ctx,
@@ -1247,6 +1305,7 @@ func (b *Builder) validateAsOf(asOfClause tree.AsOfClause) {
 
 	// Allow anything with max_timestamp_bound to differ, as this
 	// is a retry and we expect AOST to differ.
+	// 允许任何具有 max_timestamp_bound 的东西不同，因为这是一次重试，我们希望 AOST 不同
 	if *b.evalCtx.AsOfSystemTime != asOf &&
 		b.evalCtx.AsOfSystemTime.MaxTimestampBound.IsEmpty() {
 		panic(unimplementedWithIssueDetailf(35712, "",

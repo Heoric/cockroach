@@ -23,16 +23,21 @@ import (
 // subquery within its subtree that has at least one outer column, and if that
 // subquery needs to be hoisted up into its parent query as part of query
 // decorrelation.
+// 如果给定的标量表达式在其子树中包含至少一个外列的子查询，
+// 并且该子查询需要作为查询去相关的一部分提升到其父查询中，则 HasHoistableSubquery 返回 true。
 func (c *CustomFuncs) HasHoistableSubquery(scalar opt.ScalarExpr) bool {
 	// Shortcut if the scalar has properties associated with it.
+	// 如果标量具有与其关联的属性，则为快捷方式。
 	if scalarPropsExpr, ok := scalar.(memo.ScalarPropsExpr); ok {
 		// Don't bother traversing the expression tree if there is no subquery.
+		// 如果没有子查询，请不要费心遍历表达式树。
 		scalarProps := scalarPropsExpr.ScalarProps()
 		if !scalarProps.HasSubquery {
 			return false
 		}
 
 		// Lazily calculate and store the HasHoistableSubquery value.
+		// 延迟计算并存储 HasHoistableSubquery 值。
 		if !scalarProps.IsAvailable(props.HasHoistableSubquery) {
 			scalarProps.Rule.HasHoistableSubquery = c.deriveHasHoistableSubquery(scalar)
 			scalarProps.SetAvailable(props.HasHoistableSubquery)
@@ -41,6 +46,7 @@ func (c *CustomFuncs) HasHoistableSubquery(scalar opt.ScalarExpr) bool {
 	}
 
 	// Otherwise fall back on full traversal of subtree.
+	// 否则退回到子树的完全遍历。
 	return c.deriveHasHoistableSubquery(scalar)
 }
 
@@ -69,6 +75,9 @@ func (c *CustomFuncs) deriveHasHoistableSubquery(scalar opt.ScalarExpr) bool {
 	// effects. These can only be executed if the branch test evaluates to true,
 	// and so it's not possible to hoist out subqueries, since they would then be
 	// evaluated when they shouldn't be.
+	// 如果 HasHoistableSubquery 对任何子项都为真，那么它对这个表达式也为真。
+	// 例外是具有副作用的 Case/If 分支。 这些只能在分支测试评估为真时执行，
+	// 因此不可能提升子查询，因为它们会在不应该评估的时候进行评估。
 	for i, n := 0, scalar.ChildCount(); i < n; i++ {
 		child := scalar.Child(i).(opt.ScalarExpr)
 		if c.deriveHasHoistableSubquery(child) {
@@ -227,6 +236,8 @@ func (c *CustomFuncs) HoistJoinSubquery(
 // HoistValuesSubquery searches the Values operator's projections for correlated
 // subqueries. Any found queries are hoisted into LeftJoinApply or
 // InnerJoinApply operators, depending on subquery cardinality:
+// HoistValuesSubquery 在 Values 运算符的投影中搜索相关子查询。
+// 任何找到的查询都会被提升到 LeftJoinApply 或 InnerJoinApply 运算符中，具体取决于子查询基数：
 //
 //   SELECT (VALUES (SELECT u FROM uv WHERE u=x LIMIT 1)) FROM xy
 //   =>
@@ -245,6 +256,8 @@ func (c *CustomFuncs) HoistJoinSubquery(
 // order to use the hoister, which requires an initial input query. While a
 // right join would be slightly better here, this is such a fringe case that
 // it's not worth the extra code complication.
+// 将带有单例空行的虚拟 VALUES 子句添加到树中以使用提升机，这需要初始输入查询。
+// 虽然右连接在这里会稍微好一些，但这是一个边缘案例，不值得额外的代码复杂化。
 func (c *CustomFuncs) HoistValuesSubquery(
 	rows memo.ScalarListExpr, private *memo.ValuesPrivate,
 ) memo.RelExpr {

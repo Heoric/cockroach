@@ -317,16 +317,20 @@ type distRecommendation int
 
 const (
 	// cannotDistribute indicates that a plan cannot be distributed.
+	// cannotDistribute 表示无法分发计划。
 	cannotDistribute distRecommendation = iota
 
 	// shouldNotDistribute indicates that a plan could suffer if distributed.
+	// shouldNotDistribute 表示如果分发计划可能会受到影响。
 	shouldNotDistribute
 
 	// canDistribute indicates that a plan will probably not benefit but will
 	// probably not suffer if distributed.
+	//canDistribute 表示计划可能不会受益，但如果分发可能不会受到影响。
 	canDistribute
 
 	// shouldDistribute indicates that a plan will likely benefit if distributed.
+	// shouldDistribute 表示如果分发，计划可能会受益。
 	shouldDistribute
 )
 
@@ -2956,6 +2960,7 @@ func (dsp *DistSQLPlanner) planJoiners(
 
 // createPhysPlan creates a PhysicalPlan as well as returns a non-nil cleanup
 // function that must be called after the flow has been cleaned up.
+// createPhysPlan 创建一个 PhysicalPlan 并返回一个非零清理函数，该函数必须在流清理后调用。
 func (dsp *DistSQLPlanner) createPhysPlan(
 	ctx context.Context, planCtx *PlanningCtx, plan planMaybePhysical,
 ) (physPlan *PhysicalPlan, cleanup func(), err error) {
@@ -3111,6 +3116,7 @@ func (dsp *DistSQLPlanner) createPhysPlanForPlanNode(
 
 	default:
 		// Can't handle a node? We wrap it and continue on our way.
+		// 无法处理节点？ 我们把它包起来，继续我们的路。
 		plan, err = dsp.wrapPlan(ctx, planCtx, n, false /* allowPartialDistribution */)
 	}
 
@@ -3156,6 +3162,10 @@ func (dsp *DistSQLPlanner) createPhysPlanForPlanNode(
 // will create a planNodeToRowSource wrapper for the sub-tree that's not
 // plannable by DistSQL. If that sub-tree has DistSQL-plannable sources, they
 // will be planned by DistSQL and connected to the wrapper.
+// wrapPlan 为任意 planNode 生成 DistSQL 处理器。
+// 当由于某种原因无法分发特定 planNode 时将调用此方法。
+// 它将为 DistSQL 无法规划的子树创建一个 planNodeToRowSource 包装器。
+// 如果该子树具有 DistSQL 可规划的源，它们将由 DistSQL 规划并连接到包装器。
 func (dsp *DistSQLPlanner) wrapPlan(
 	ctx context.Context, planCtx *PlanningCtx, n planNode, allowPartialDistribution bool,
 ) (*PhysicalPlan, error) {
@@ -3164,12 +3174,16 @@ func (dsp *DistSQLPlanner) wrapPlan(
 	// First, we search the planNode tree we're trying to wrap for the first
 	// DistSQL-enabled planNode in the tree. If we find one, we ask the planner to
 	// continue the DistSQL planning recursion on that planNode.
+	// 首先，我们在试图包装的 planNode 树中搜索树中第一个启用 DistSQL 的 planNode。
+	// 如果我们找到一个，我们要求规划器继续对该 planNode 进行 DistSQL 规划递归。
 	seenTop := false
 	nParents := uint32(0)
 	p := planCtx.NewPhysicalPlan()
 	// This will be set to first DistSQL-enabled planNode we find, if any. We'll
 	// modify its parent later to connect its source to the DistSQL-planned
 	// subtree.
+	// 这将被设置为我们找到的第一个启用 DistSQL 的 planNode，如果有的话。
+	// 稍后我们将修改其父节点以将其源连接到 DistSQL 计划的子树。
 	var firstNotWrapped planNode
 	if err := walkPlan(ctx, n, planObserver{
 		enterNode: func(ctx context.Context, nodeName string, plan planNode) (bool, error) {
@@ -3181,6 +3195,7 @@ func (dsp *DistSQLPlanner) wrapPlan(
 			}
 			if !seenTop {
 				// We know we're wrapping the first node, so ignore it.
+				// 我们知道我们正在包装第一个节点，所以忽略它。
 				seenTop = true
 				return true, nil
 			}
@@ -3188,6 +3203,8 @@ func (dsp *DistSQLPlanner) wrapPlan(
 			// Continue walking until we find a node that has a DistSQL
 			// representation - that's when we'll quit the wrapping process and hand
 			// control of planning back to the DistSQL physical planner.
+			// 继续走，直到我们找到一个具有 DistSQL 表示的节点——
+			// 那时我们将退出包装过程并将规划控制权交还给 DistSQL 物理规划器。
 			if !dsp.mustWrapNode(planCtx, plan) {
 				firstNotWrapped = plan
 				p, err = dsp.createPhysPlanForPlanNode(ctx, planCtx, plan)
@@ -4192,11 +4209,15 @@ func (dsp *DistSQLPlanner) FinalizePlan(planCtx *PlanningCtx, plan *PhysicalPlan
 // if necessary as well as populates the endpoints of the plan.
 // - rowCount is the estimated number of rows that the plan outputs. Use a
 // negative number if the stats were not available to make an estimate.
+// finalizePlanWithRowCount 添加最终的“结果”阶段和最终投影（如有必要）并填充计划的端点。
+// - rowCount 是计划输出的估计行数。 如果无法使用统计数据进行估算，请使用负数。
 func (dsp *DistSQLPlanner) finalizePlanWithRowCount(
 	planCtx *PlanningCtx, plan *PhysicalPlan, rowCount int64,
 ) {
 	// Find all MetadataTestSenders in the plan, so that the MetadataTestReceiver
 	// knows how many sender IDs it should expect.
+	// 找到计划中的所有 MetadataTestSenders，以便 MetadataTestReceiver
+	// 知道它应该期望多少个发件人 ID。
 	var metadataSenders []string
 	for _, proc := range plan.Processors {
 		if proc.Spec.Core.MetadataTestSender != nil {
@@ -4211,6 +4232,7 @@ func (dsp *DistSQLPlanner) finalizePlanWithRowCount(
 
 	// Add a final projection so that DistSQLReceiver gets the rows of the
 	// desired schema.
+	// 添加最终投影，以便 DistSQLReceiver 获取所需模式的行。
 	projection := make([]uint32, 0, len(plan.GetResultTypes()))
 	for _, outputCol := range plan.PlanToStreamColMap {
 		if outputCol >= 0 {

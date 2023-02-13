@@ -153,6 +153,8 @@ func shouldEmitUnmatchedRow(side joinSide, joinType descpb.JoinType) bool {
 // evaluated; if it fails, returns nil. Note that if the join is outputting a
 // continuation column, the returned slice does not include the continuation
 // column, but has the capacity for it.
+// render 根据 join 类型构造一行（对于 semi/anti 和 set-op joins，仅包括一侧的列）。
+// 评估 ON 条件； 如果失败，则返回 nil。 请注意，如果连接正在输出连续列，则返回的切片不包括连续列，但具有它的容量。
 func (jb *joinerBase) render(lrow, rrow rowenc.EncDatumRow) (rowenc.EncDatumRow, error) {
 	outputRow := jb.renderForOutput(lrow, rrow)
 
@@ -160,6 +162,7 @@ func (jb *joinerBase) render(lrow, rrow rowenc.EncDatumRow) (rowenc.EncDatumRow,
 		// We need to evaluate the ON condition which can refer to the columns
 		// from both sides of the join regardless of the join type, so we need
 		// to have the combined row.
+		// 我们需要评估 ON 条件，无论 join 类型如何，它都可以引用 join 两侧的列，因此我们需要具有组合行。
 		var combinedRow rowenc.EncDatumRow
 		if jb.joinType.ShouldIncludeLeftColsInOutput() && jb.joinType.ShouldIncludeRightColsInOutput() {
 			// When columns from both sides are needed in the output, we can

@@ -41,42 +41,54 @@ type ConsumerStatus uint32
 
 const (
 	// NeedMoreRows indicates that the consumer is still expecting more rows.
+	// NeedMoreRows 表示消费者仍然期待更多的行。
 	NeedMoreRows ConsumerStatus = iota
 	// DrainRequested indicates that the consumer will not process any more data
 	// rows, but will accept trailing metadata from the producer.
+	// DrainRequested 表示消费者将不再处理任何数据行，但会接受来自生产者的尾部元数据。
 	DrainRequested
 	// ConsumerClosed indicates that the consumer will not process any more data
 	// rows or metadata. This is also commonly returned in case the consumer has
 	// encountered an error.
+	// ConsumerClosed 表示消费者将不再处理任何数据行或元数据。 如果消费者遇到错误，通常也会返回此信息。
 	ConsumerClosed
 )
 
 type receiverBase interface {
 	// ProducerDone is called when the producer has pushed all the rows and
 	// metadata; it causes the receiverBase to process all rows and clean up.
+	// ProducerDone 在生产者推送完所有行和元数据时调用； 它会导致 receiverBase 处理所有行并进行清理。
 	//
 	// ProducerDone() cannot be called concurrently with Push(), and after it
 	// is called, no other method can be called.
+	// ProducerDone()不能和Push()同时调用，调用后不能再调用其他方法。
 	ProducerDone()
 }
 
 // RowReceiver is any component of a flow that receives rows from another
 // component. It can be an input synchronizer, a router, or a mailbox.
+// RowReceiver 是从另一个组件接收行的流的任何组件。 它可以是输入同步器、router 或 mailbox。
 type RowReceiver interface {
 	receiverBase
 
 	// Push sends a record to the consumer of this RowReceiver. Exactly one of the
 	// row/meta must be specified (i.e. either row needs to be non-nil or meta
 	// needs to be non-Empty()). May block.
+	// Push 向这个 RowReceiver 的消费者发送一条记录。
+	// 必须准确指定行/元之一（即，行需要为非零或元需要为非 Empty()）。 可以阻塞。
 	//
 	// The return value indicates the current status of the consumer. Depending on
 	// it, producers are expected to drain or shut down. In all cases,
 	// ProducerDone() needs to be called (after draining is done, if draining was
 	// requested).
+	// 返回值表示消费者的当前状态。 取决于它，生产商预计会耗尽或关闭。
+	// 在所有情况下，都需要调用 ProducerDone()（如果请求了排空，则在排空完成后）。
 	//
 	// Unless specifically permitted by the underlying implementation, (see
 	// copyingRowReceiver, for example), the sender must not modify the row
 	// and the metadata after calling this function.
+	// 除非底层实现明确允许（例如，参见 copyingRowReceiver），
+	// 否则发送方不得在调用此函数后修改行和元数据。
 	//
 	// After DrainRequested is returned, it is expected that all future calls only
 	// carry metadata (however that is not enforced and implementations should be
@@ -84,8 +96,13 @@ type RowReceiver interface {
 	// implementations have to ignore further calls to Push() (such calls are
 	// allowed because there might be multiple producers for a single RowReceiver
 	// and they might not all be aware of the last status returned).
+	// 返回 DrainRequested 后，预计所有未来的调用都只携带元数据
+	// （然而，这不是强制执行的，实现应该准备好丢弃非元数据行）。
+	// 如果返回 ConsumerClosed，实现必须忽略对 Push() 的进一步调用
+	//（允许此类调用，因为单个 RowReceiver 可能有多个生产者，并且他们可能并不都知道返回的最后状态）。
 	//
 	// Implementations of Push() must be thread-safe.
+	// Push() 的实现必须是线程安全的。
 	Push(row rowenc.EncDatumRow, meta *execinfrapb.ProducerMetadata) ConsumerStatus
 }
 
@@ -101,6 +118,7 @@ type BatchReceiver interface {
 
 // RowSource is any component of a flow that produces rows that can be consumed
 // by another component.
+// RowSource 是流的任何组件，它生成可由另一个组件使用的行。
 //
 // Communication components generally (e.g. RowBuffer, RowChannel) implement
 // this interface. Some processors also implement it (in addition to
@@ -180,8 +198,10 @@ type RowSourcedProcessor interface {
 
 // Run reads records from the source and outputs them to the receiver, properly
 // draining the source of metadata and closing both the source and receiver.
+// Run 从源读取记录并将它们输出到接收器，适当地耗尽源的元数据并关闭源和接收器。
 //
 // src needs to have been Start()ed before calling this.
+// src 需要在调用之前已经启动（）ed。
 func Run(ctx context.Context, src RowSource, dst RowReceiver) {
 	for {
 		row, meta := src.Next()

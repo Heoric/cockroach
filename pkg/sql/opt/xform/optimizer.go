@@ -42,6 +42,7 @@ type RuleSet = util.FastIntSet
 
 // Optimizer transforms an input expression tree into the logically equivalent
 // output expression tree with the lowest possible execution cost.
+// 优化器将输入表达式树转换为具有最低可能执行成本的逻辑等效输出表达式树。
 //
 // To use the optimizer, construct an input expression tree by invoking
 // construction methods on the Optimizer.Factory instance. The factory
@@ -50,6 +51,10 @@ type RuleSet = util.FastIntSet
 // Optimize method, along with a set of required physical properties that the
 // expression must provide. The optimizer will return an Expr over the output
 // expression tree with the lowest cost.
+// 要使用优化器，请通过在 Optimizer.Factory 实例上调用构造方法来构造输入表达式树。
+// 作为构造的一部分，工厂将输入表达式转换为其规范形式。
+// 将工厂构造的树的根连同表达式必须提供的一组必需的物理属性一起传递给 Optimize 方法。
+// 优化器将以最低成本在输出表达式树上返回一个 Expr。
 type Optimizer struct {
 	evalCtx *tree.EvalContext
 
@@ -106,6 +111,11 @@ type Optimizer struct {
 // member's children back to the group member's group. To avoid stack overflows
 // that these memo cycles cause, the optimizer throws an internal error when
 // this limit is reached.
+// maxGroupPasses 是任何单个备忘录组允许的最大优化遍数。
+// 每次在组上调用 optimizeGroup 时，groupState.passes 字段都会递增。
+// 如果 groupState 的通行证超过此限制，则备忘录中可能存在一个循环，
+// 其中存在从组成员的孩子返回组成员所在组的路径。
+// 为了避免这些备忘录循环导致的堆栈溢出，优化器会在达到此限制时抛出一个内部错误。
 const maxGroupPasses = 100_000
 
 // Init initializes the Optimizer with a new, blank memo structure inside. This
@@ -205,6 +215,8 @@ func (o *Optimizer) Memo() *memo.Memo {
 // properties at the lowest possible execution cost, but is still logically
 // equivalent to the given expression. If there is a cost "tie", then any one
 // of the qualifying lowest cost expressions may be selected by the optimizer.
+// Optimize 以尽可能低的执行成本返回满足所需物理属性的表达式，但在逻辑上仍等同于给定的表达式。
+// 如果存在成本“平局”，则优化器可以选择任何一个符合条件的最低成本表达式。
 func (o *Optimizer) Optimize() (_ opt.Expr, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -227,9 +239,11 @@ func (o *Optimizer) Optimize() (_ opt.Expr, err error) {
 	}
 
 	// Optimize the root expression according to the properties required of it.
+	// 根据需要的属性优化根表达式。
 	o.optimizeRootWithProps()
 
 	// Now optimize the entire expression tree.
+	// 现在优化整个表达式树。
 	root := o.mem.RootExpr().(memo.RelExpr)
 	rootProps := o.mem.RootProps()
 	o.optimizeGroup(root, rootProps)
@@ -237,6 +251,7 @@ func (o *Optimizer) Optimize() (_ opt.Expr, err error) {
 	// Walk the tree from the root, updating child pointers so that the memo
 	// root points to the lowest cost tree by default (rather than the normalized
 	// tree by default.
+	// 从根开始遍历树，更新子指针，以便备忘录根默认指向成本最低的树（而不是默认的归一化树。
 	root = o.setLowestCostTree(root, rootProps).(memo.RelExpr)
 	o.mem.SetRoot(root, rootProps)
 
@@ -250,6 +265,7 @@ func (o *Optimizer) Optimize() (_ opt.Expr, err error) {
 
 	// Validate that the factory's stack depth is zero after all optimizations
 	// have been applied.
+	// 在应用所有优化后验证工厂的堆栈深度是否为零。
 	o.f.CheckConstructorStackDepth()
 
 	return root, nil
@@ -285,14 +301,18 @@ func (o *Optimizer) optimizeExpr(
 // finds the expression tree with the lowest cost (i.e. the "best") that
 // provides the given required physical properties. Enforcers are added as
 // needed to provide the required properties.
+// optimizeGroup 枚举以给定备忘录组为根的表达式树，并找到提供给定所需物理属性的成本最低
+// （即“最佳”）的表达式树。 根据需要添加 Enforcer 以提供所需的属性。
 //
 // The following is a simplified walkthrough of how the optimizer might handle
 // the following SQL query:
+// 以下是优化器如何处理以下 SQL 查询的简化演练：
 //
 //   SELECT * FROM a WHERE x=1 ORDER BY y
 //
 // Before the optimizer is invoked, the memo group contains a single normalized
 // expression:
+// 在调用优化器之前，备忘录组包含一个规范化表达式：
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -309,6 +329,11 @@ func (o *Optimizer) optimizeExpr(
 // through the requirement to its input. Accordingly, optimizeGroupMember
 // recursively invokes optimizeGroup on select's input child (group #2), with
 // the same set of required properties.
+// 优化从备忘录的根部开始（第 1 组），并使用该组所需的属性调用优化组（“ordering:y”）。
+// optimizeGroup 然后为 Select 表达式调用 optimizeGroupMember，
+// 它检查表达式是否可以提供所需的属性。 由于 Select 是传递运算符，它可以通过将要求传递到其输入来提供属性。
+// 因此，optimizeGroupMember 在 select 的输入子项（第 2 组）
+// 上递归调用 optimizeGroup，具有相同的所需属性集。
 //
 // Now the same set of steps are applied to group #2. However, the Scan
 // expression cannot provide the required ordering (say because it's ordered on
@@ -318,6 +343,10 @@ func (o *Optimizer) optimizeExpr(
 // these reduced requirements, so it is costed and added as the current lowest
 // cost expression for that group for that set of properties (i.e. the empty
 // set).
+// 现在，相同的一组步骤应用于第 2 组。 但是，Scan 表达式无法提供所需的排序
+//（比如因为它是按 x 而不是 y 排序的）。 优化器必须添加一个排序执行器。
+// 它通过在同一组 #2 上递归调用 optimizeGroup 来实现这一点，但这次没有排序要求。
+// Scan 运算符能够满足这些降低的要求，因此它被计算并添加为该组属性（即空集）的当前最低成本表达式。
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -332,6 +361,8 @@ func (o *Optimizer) optimizeExpr(
 // The recursion pops up a level, and now the Sort enforcer knows its input,
 // and so it too can be costed (cost of input + extra cost of sort) and added
 // as the best expression for the property set with the ordering requirement.
+// 递归弹出一个级别，现在排序执行器知道它的输入，因此它也可以计算成本（输入成本 + 额外排序成本）
+// 并添加为具有排序要求的属性集的最佳表达式。
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -354,6 +385,11 @@ func (o *Optimizer) optimizeExpr(
 // Select operator can now be costed and added as the best expression for the
 // ordering requirement. It requires the same ordering requirement from its
 // input child (i.e. the scan).
+// 递归弹出另一个层次，Select 运算符现在知道它的输入（Scan 的 Sort）。
+// 然后它继续处理它的标量过滤器子项并优化它和它的后代，这相对无趣，
+// 因为没有要考虑的子查询（事实上，优化器识别出这一点并完全跳过遍历）。
+// 优化所有子项后，现在可以计算 Select 运算符的成本并将其添加为排序要求的最佳表达式。
+// 它需要来自其输入子项（即扫描）的相同排序要求。
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -784,6 +820,7 @@ func (o *Optimizer) ensureOptState(grp memo.RelExpr, required *physical.Required
 // optimizeRootWithProps tries to simplify the root operator based on the
 // properties required of it. This may trigger the creation of a new root and
 // new properties.
+// optimizeRootWithProps 尝试根据根运算符所需的属性对其进行简化。 这可能会触发新根和新属性的创建。
 func (o *Optimizer) optimizeRootWithProps() {
 	root, ok := o.mem.RootExpr().(memo.RelExpr)
 	if !ok {
@@ -792,8 +829,10 @@ func (o *Optimizer) optimizeRootWithProps() {
 	rootProps := o.mem.RootProps()
 
 	// [SimplifyRootOrdering]
+	// 简化根排序
 	// SimplifyRootOrdering removes redundant columns from the root properties,
 	// based on the operator's functional dependencies.
+	// SimplifyRootOrdering 根据运算符的函数依赖性从根属性中删除冗余列。
 	if rootProps.Ordering.CanSimplify(&root.Relational().FuncDeps) {
 		if o.matchedRule == nil || o.matchedRule(opt.SimplifyRootOrdering) {
 			simplified := *rootProps
@@ -810,6 +849,7 @@ func (o *Optimizer) optimizeRootWithProps() {
 	// [PruneRootCols]
 	// PruneRootCols discards columns that are not needed by the root's ordering
 	// or presentation properties.
+	// PruneRootCols 丢弃根的排序或表示属性不需要的列。
 	neededCols := rootProps.ColSet()
 	if !neededCols.SubsetOf(root.Relational().OutputCols) {
 		panic(errors.AssertionFailedf(
@@ -822,6 +862,7 @@ func (o *Optimizer) optimizeRootWithProps() {
 		if o.matchedRule == nil || o.matchedRule(opt.PruneRootCols) {
 			root = o.f.CustomFuncs().PruneCols(root, neededCols)
 			// We may have pruned a column that appears in the required ordering.
+			// 我们可能已经修剪了以所需顺序出现的列。
 			rootCols := root.Relational().OutputCols
 			if !rootProps.Ordering.SubsetOfCols(rootCols) {
 				newProps := *rootProps

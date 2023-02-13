@@ -1581,9 +1581,11 @@ func (txn *Txn) Active() bool {
 
 // Step performs a sequencing step. Step-wise execution must be
 // already enabled.
+// Step 执行排序步骤。 必须已经启用逐步执行。
 //
 // In step-wise execution, reads operate at a snapshot established at
 // the last step, instead of the latest write if not yet enabled.
+// 在逐步执行中，读取操作在最后一步建立的快照上进行，而不是在尚未启用的情况下进行最新的写入操作。
 func (txn *Txn) Step(ctx context.Context) error {
 	txn.mu.Lock()
 	defer txn.mu.Unlock()
@@ -1599,6 +1601,7 @@ func (txn *Txn) SetReadSeqNum(seq enginepb.TxnSeq) error {
 
 // ConfigureStepping configures step-wise execution in the
 // transaction.
+// ConfigureStepping 在事务中配置逐步执行。
 func (txn *Txn) ConfigureStepping(ctx context.Context, mode SteppingMode) (prevMode SteppingMode) {
 	txn.mu.Lock()
 	defer txn.mu.Unlock()

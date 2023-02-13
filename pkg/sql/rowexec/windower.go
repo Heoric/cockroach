@@ -260,6 +260,8 @@ func (w *windower) close() {
 // accumulateRows continually reads rows from the input and accumulates them
 // in allRowsPartitioned. If it encounters metadata, the metadata is returned
 // immediately. Subsequent calls of this function will resume row accumulation.
+// accumulateRows 不断从输入中读取行并将它们累积在 allRowsPartitioned 中。
+// 如果遇到元数据，则立即返回元数据。 此函数的后续调用将恢复行累积。
 func (w *windower) accumulateRows() (
 	windowerState,
 	rowenc.EncDatumRow,
@@ -299,9 +301,12 @@ func (w *windower) accumulateRows() (
 // emitRow emits the next row if output rows have already been populated;
 // if they haven't, it first computes all window functions over all partitions
 // (i.e. populates w.windowValues), and then emits the first row.
+// 如果输出行已经填充，则 emitRow 发出下一行；
+// 如果没有，它首先计算所有分区上的所有窗口函数（即填充 w.windowValues），然后发出第一行。
 //
 // emitRow() might move to stateDraining. It might also not return a row if the
 // ProcOutputHelper filtered the current row out.
+// emitRow() 可能会移动到 stateDraining。 如果 ProcOutputHelper 过滤掉当前行，它也可能不返回行。
 func (w *windower) emitRow() (windowerState, rowenc.EncDatumRow, *execinfrapb.ProducerMetadata) {
 	if w.inputDone {
 		for !w.populated {

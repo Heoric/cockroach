@@ -32,12 +32,18 @@ type Expr interface {
 	// Walk recursively walks all children using WalkExpr. If any children are changed, it returns a
 	// copy of this node updated to point to the new children. Otherwise the receiver is returned.
 	// For childless (leaf) Exprs, its implementation is empty.
+	// Walk 使用 WalkExpr 递归地遍历所有孩子。
+	// 如果更改了任何子节点，它会返回更新后的该节点的副本以指向新的子节点。
+	// 否则返回接收器。 对于无子（叶）Exprs，它的实现是空的。
 	Walk(Visitor) Expr
 	// TypeCheck transforms the Expr into a well-typed TypedExpr, which further permits
 	// evaluation and type introspection, or an error if the expression cannot be well-typed.
 	// When type checking is complete, if no error was reported, the expression and all
 	// sub-expressions will be guaranteed to be well-typed, meaning that the method effectively
 	// maps the Expr tree into a TypedExpr tree.
+	// TypeCheck 将 Expr 转换为类型良好的 TypedExpr，这进一步允许评估和类型自省，
+	// 或者如果表达式类型不正确则出错。 当类型检查完成后，如果没有报错，
+	// 表达式和所有子表达式将被保证是类型良好的，这意味着该方法有效地将 Expr 树映射到 TypedExpr 树。
 	//
 	// The semaCtx parameter defines the context in which to perform type checking.
 	// The desired parameter hints the desired type that the method's caller wants from
@@ -45,6 +51,11 @@ type Expr interface {
 	// type. Instead, call it with wildcard type types.Any if no specific type is
 	// desired. This restriction is also true of most methods and functions related
 	// to type checking.
+	// semaCtx 参数定义执行类型检查的上下文。
+	// desired 参数暗示方法的调用者希望从生成的 TypedExpr 中获得所需的类型。
+	// 使用 nil 所需类型调用 TypeCheck 是无效的。
+	// 相反，如果不需要特定类型，则使用通配符类型 types.Any 调用它。
+	// 这个限制也适用于大多数与类型检查相关的方法和函数。
 	TypeCheck(ctx context.Context, semaCtx *SemaContext, desired *types.T) (TypedExpr, error)
 }
 
@@ -61,15 +72,25 @@ type TypedExpr interface {
 	// should be replaced prior to expression evaluation by an
 	// appropriate WalkExpr. For example, Placeholder should be replaced
 	// by the argument passed from the client.
+	// Eval 计算 SQL 表达式。 表达式求值基本上是直接遍历解析树。
+	// 唯一显着的复杂性是类型和隐式转换的处理。
+	// 有关详细信息，请参阅 binOps 和 cmpOps。
+	// 请注意，如果遇到某些节点类型，表达式评估将返回错误：
+	// Placeholder、VarName（以及相关的 UnqualifiedStar、UnresolvedName
+	// 和 AllColumnsSelector）或 Subquery。
+	// 这些节点应该在表达式评估之前由适当的 WalkExpr 替换。
+	// 例如，Placeholder 应替换为从客户端传递的参数。
 	Eval(*EvalContext) (Datum, error)
 	// ResolvedType provides the type of the TypedExpr, which is the type of Datum
 	// that the TypedExpr will return when evaluated.
+	// ResolvedType 提供 TypedExpr 的类型，这是 TypedExpr 在计算时将返回的 Datum 的类型。
 	ResolvedType() *types.T
 }
 
 // VariableExpr is an Expr that may change per row. It is used to
 // signal the evaluation/simplification machinery that the underlying
 // Expr is not constant.
+// VariableExpr 是一个可以每行改变的 Expr。它用于向评估/简化机制发出信号，表明基础 Expr 不是常数。
 type VariableExpr interface {
 	Expr
 	Variable()
@@ -84,6 +105,7 @@ var _ VariableExpr = &ColumnItem{}
 
 // operatorExpr is used to identify expression types that involve operators;
 // used by exprStrWithParen.
+// operatorExpr 用于标识涉及运算符的表达式类型； 由 exprStrWithParen 使用。
 type operatorExpr interface {
 	Expr
 	operatorExpr()
@@ -135,6 +157,7 @@ func exprFmtWithParen(ctx *FmtCtx, e Expr) {
 
 // typeAnnotation is an embeddable struct to provide a TypedExpr with a dynamic
 // type annotation.
+// typeAnnotation 是一个可嵌入的结构，用于为 TypedExpr 提供动态类型注释。
 type typeAnnotation struct {
 	typ *types.T
 }

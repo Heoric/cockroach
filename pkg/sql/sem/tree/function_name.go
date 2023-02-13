@@ -26,10 +26,15 @@ import (
 // attribute.  This is populated during parsing with an
 // UnresolvedName, and gets assigned a FunctionDefinition upon the
 // first call to its Resolve() method.
+// 其他语法节点包含一个可变的 ResolvableFunctionReference 属性。
+// 这是在使用 UnresolvedName 解析期间填充的，并在第一次调用其 Resolve()
+// 方法时被分配一个 FunctionDefinition。
 
 // ResolvableFunctionReference implements the editable reference cell
 // of a FuncExpr. The FunctionRerence is updated by the Normalize()
 // method.
+// ResolvableFunctionReference 实现 FuncExpr 的可编辑引用单元格。
+// FunctionRerence 由 Normalize() 方法更新。
 type ResolvableFunctionReference struct {
 	FunctionReference
 }

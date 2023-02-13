@@ -62,10 +62,13 @@ func (r *runParams) Ann() *tree.Annotations {
 }
 
 // planNode defines the interface for executing a query or portion of a query.
+// planNode 定义用于执行查询或部分查询的接口。
 //
 // The following methods apply to planNodes and contain special cases
 // for each type; they thus need to be extended when adding/removing
 // planNode instances:
+// 以下方法适用于 planNodes 并包含每种类型的特殊情况；
+// 因此，在添加/删除 planNode 实例时需要扩展它们：
 // - planVisitor.visit()           (walk.go)
 // - planNodeNames                 (walk.go)
 // - setLimitHint()                (limit_hint.go)
@@ -78,14 +81,20 @@ type planNode interface {
 	// encountered or if there is no more work to do. For statements
 	// that return a result set, the Values() method will return one row
 	// of results each time that Next() returns true.
+	// Next 执行一个工作单元，如果遇到错误或没有更多工作要做，则返回 false。
+	// 对于返回结果集的语句，每次 Next() 返回 true 时，Values() 方法将返回一行结果。
 	//
 	// Available after startPlan(). It is illegal to call Next() after it returns
 	// false. It is legal to call Next() even if the node implements
 	// planNodeFastPath and the FastPathResults() method returns true.
+	// 在 startPlan() 之后可用。 返回 false 后调用 Next() 是非法的。
+	// 即使节点实现了 planNodeFastPath 并且 FastPathResults() 方法返回 true，
+	// 调用 Next() 也是合法的。
 	Next(params runParams) (bool, error)
 
 	// Values returns the values at the current row. The result is only valid
 	// until the next call to Next().
+	// 值返回当前行的值。 结果仅在下一次调用 Next() 之前有效。
 	//
 	// Available after Next().
 	Values() tree.Datums
@@ -94,13 +103,18 @@ type planNode interface {
 	// This method should be called if the node has been used in any way (any
 	// methods on it have been called) after it was constructed. Note that this
 	// doesn't imply that startExec() has been necessarily called.
+	// Close 终止 planNode 执行并释放其资源。
+	// 如果在构造节点后以任何方式使用了节点（调用了节点上的任何方法），则应调用此方法。
+	// 请注意，这并不意味着必须调用 startExec()。
 	//
 	// This method must not be called during execution - the planNode
 	// tree must remain "live" and readable via walk() even after
 	// execution completes.
+	// 在执行期间不得调用此方法 - 即使在执行完成后，planNode 树也必须保持“活动”并且可通过 walk() 读取。
 	//
 	// The node must not be used again after this method is called. Some nodes put
 	// themselves back into memory pools on Close.
+	// 调用此方法后不得再次使用该节点。 一些节点在关闭时将自己放回内存池中。
 	Close(ctx context.Context)
 }
 

@@ -27,6 +27,10 @@ import (
 // ORDER BY operator) and by the selection of specific implementations during
 // optimization (e.g. a merge join requires the inputs to be sorted in a
 // particular order).
+// 必需属性是表达式的有趣特征，会影响其布局、表示或位置，但不会影响其逻辑内容。
+// 示例包括行顺序、列命名和数据分布（数据范围的物理位置）。
+// 物理属性存在于关系代数之外，来自 SQL 查询本身（例如非关系 ORDER BY 运算符）
+// 和优化期间特定实现的选择（例如合并连接要求输入按特定顺序排序） 命令）。
 //
 // Required properties are derived top-to-bottom - there is a required physical
 // property on the root, and each expression can require physical properties on
@@ -34,16 +38,23 @@ import (
 // with respect to a particular set of required physical properties. The goal
 // is to find the lowest cost expression that provides those properties while
 // still remaining logically equivalent.
+// 必需的属性是从上到下派生的——根上有一个必需的物理属性，每个表达式都需要一个或多个操作数的物理属性。
+// 当一个表达式被优化时，它总是与一组特定的所需物理属性有关。
+// 目标是找到提供这些属性的最低成本表达式，同时仍保持逻辑等效。
 type Required struct {
 	// Presentation specifies the naming, membership (including duplicates),
 	// and order of result columns. If Presentation is not defined, then no
 	// particular column presentation is required or provided.
+	// Presentation 指定结果列的命名、成员资格（包括重复项）和顺序。
+	// 如果未定义 Presentation，则不需要或提供特定的列展示。
 	Presentation Presentation
 
 	// Ordering specifies the sort order of result rows. Rows can be sorted by
 	// one or more columns, each of which can be sorted in either ascending or
 	// descending order. If Ordering is not defined, then no particular ordering
 	// is required or provided.
+	// Ordering 指定结果行的排序顺序。 行可以按一列或多列排序，每一列都可以按升序或降序排序。
+	// 如果未定义排序，则不需要或提供特定的排序。
 	Ordering props.OrderingChoice
 
 	// LimitHint specifies a "soft limit" to the number of result rows that may
@@ -53,6 +64,10 @@ type Required struct {
 	// A LimitHint of 0 indicates "no limit". The LimitHint is an intermediate
 	// float64 representation, and can be converted to an integer number of rows
 	// using LimitHintInt64.
+	// LimitHint 指定表达式可能需要的结果行数的“软限制”。
+	// 如果需要，表达式仍需要返回所有结果行，但可以基于仅需要提示的行数的假设对其进行优化。
+	// LimitHint 为 0 表示“无限制”。
+	// LimitHint 是一种中间 float64 表示形式，可以使用 LimitHintInt64 将其转换为整数行。
 	LimitHint float64
 
 	// Distribution specifies the physical distribution of result rows. This is
@@ -61,6 +76,9 @@ type Required struct {
 	// Currently, the only operator in a plan tree that has a required
 	// distribution is the root, since data must always be returned to the gateway
 	// region.
+	// Distribution 指定结果行的物理分布。 这被定义为可能包含结果行的区域集。
+	// 如果未定义 Distribution，则不需要特定的分布。
+	// 目前，计划树中唯一具有所需分布的运算符是根，因为数据必须始终返回到网关区域。
 	Distribution Distribution
 }
 
@@ -137,6 +155,10 @@ func (p *Required) LimitHintInt64() int64 {
 // While it cannot add unique columns, Presentation can rename, reorder,
 // duplicate and discard columns. If Presentation is not defined, then no
 // particular column presentation is required or provided. For example:
+//   a.y:2 a.x:1 a.y:2 column1:3
+// Presentation 指定操作员需要或提供的结果列的命名、成员资格（包括重复项）和顺序。
+// 虽然它不能添加唯一列，但 Presentation 可以重命名、重新排序、复制和丢弃列。
+// 如果未定义 Presentation，则不需要或提供特定的列展示。 例如：
 //   a.y:2 a.x:1 a.y:2 column1:3
 type Presentation []opt.AliasedColumn
 

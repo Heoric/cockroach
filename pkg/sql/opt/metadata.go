@@ -538,6 +538,7 @@ func (md *Metadata) NumColumns() int {
 // ColumnMeta looks up the metadata for the column associated with the given
 // column id. The same column can be added multiple times to the query metadata
 // and associated with multiple column ids.
+// ColumnMeta 查找与给定列 ID 关联的列的元数据。 同一列可以多次添加到查询元数据并与多个列 ID 关联。
 func (md *Metadata) ColumnMeta(colID ColumnID) *ColumnMeta {
 	return &md.cols[colID.index()]
 }
@@ -660,12 +661,15 @@ func (md *Metadata) Sequence(seqID SequenceID) cat.Sequence {
 // within the scope of a query. For example, a UniqueID field should be
 // added to an expression type if two instances of that type might otherwise
 // be indistinguishable based on the values of their other fields.
+// UniqueID 应用于消除查询范围内表达式的多次使用的歧义。
+// 例如，如果基于其他字段的值，该类型的两个实例可能无法区分，则应将 UniqueID 字段添加到表达式类型。
 //
 // See the comment for Metadata for more details on identifiers.
 type UniqueID uint64
 
 // NextUniqueID returns a fresh UniqueID which is guaranteed to never have been
 // previously allocated in this memo.
+// NextUniqueID 返回一个新的 UniqueID，保证以前从未在此备忘录中分配过。
 func (md *Metadata) NextUniqueID() UniqueID {
 	md.currUniqueID++
 	return md.currUniqueID

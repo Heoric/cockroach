@@ -110,6 +110,8 @@ func (tp ObjectNamePrefixList) Format(ctx *FmtCtx) {
 // UnresolvedObjectName is an unresolved qualified name for a database object
 // (table, view, etc). It is like UnresolvedName but more restrictive.
 // It should only be constructed via NewUnresolvedObjectName.
+// UnresolvedObjectName 是数据库对象（表、视图等）的未解析限定名称。
+// 它类似于 UnresolvedName 但限制性更强。 它只能通过 NewUnresolvedObjectName 构造。
 type UnresolvedObjectName struct {
 	// NumParts indicates the number of name parts specified; always 1 or greater.
 	NumParts int

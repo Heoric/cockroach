@@ -411,11 +411,15 @@ func (s *scope) makePresentationWithHiddenCols() physical.Presentation {
 // walkExprTree walks the given expression and performs name resolution,
 // replaces unresolved column names with columnProps, and replaces subqueries
 // with typed subquery structs.
+// walkExprTree 遍历给定的表达式并执行名称解析，
+// 用 columnProps 替换未解析的列名，并用类型化子查询结构替换子查询。
 func (s *scope) walkExprTree(expr tree.Expr) tree.Expr {
 	// TODO(peter): The caller should specify the desired number of columns. This
 	// is needed when a subquery is used by an UPDATE statement.
+	// 调用者应指定所需的列数。 当 UPDATE 语句使用子查询时需要这样做。
 	// TODO(andy): shouldn't this be part of the desired type rather than yet
 	// another parameter?
+	// 这不应该是所需类型的一部分而不是另一个参数吗？
 	s.columns = 1
 
 	expr, _ = tree.WalkExpr(s, expr)
@@ -469,12 +473,17 @@ func (s *scope) resolveType(expr tree.Expr, desired *types.T) tree.TypedExpr {
 // of the conversion, it performs name resolution, replaces unresolved
 // column names with columnProps, and replaces subqueries with typed subquery
 // structs.
+// resolveAndRequireType 将给定的 expr 转换为 tree.TypedExpr。
+// 作为转换的一部分，它执行名称解析，用 columnProps 替换未解析的列名，并用类型化子查询结构替换子查询。
 //
 // If the resolved type does not match the desired type, resolveAndRequireType
 // throws an error (in contrast to resolveType, which returns the typed
 // expression with no error). If the result type is types.Unknown, then
 // resolveType will wrap the expression in a type cast in order to produce the
 // desired type.
+// 如果解析的类型与所需的类型不匹配，resolveAndRequireType 会抛出一个错误
+// （与 resolveType 相反，它会返回没有错误的类型化表达式）。
+// 如果结果类型是 types.Unknown，则 resolveType 会将表达式包装在类型转换中以生成所需的类型。
 func (s *scope) resolveAndRequireType(expr tree.Expr, desired *types.T) tree.TypedExpr {
 	expr = s.walkExprTree(expr)
 	texpr, err := tree.TypeCheckAndRequire(s.builder.ctx, expr, s.builder.semaCtx, desired, s.context.String())
@@ -635,11 +644,18 @@ func (s *scope) findExistingCol(expr tree.TypedExpr, allowSideEffects bool) *sco
 // should not throw an error, even though v is not a grouping column.
 // Non-grouping columns are allowed inside aggregate functions.
 //
+// startAggFunc 在构建器开始构建聚合函数时被调用。 它用于禁止嵌套聚合并确保不会在聚合参数上调用分组错误。 例如：
+// 从 kv GROUP BY k 中选择 max(v)
+// 不应抛出错误，即使 v 不是分组列。 聚合函数中允许使用非分组列。
+//
 // startAggFunc returns a temporary scope for building the aggregate arguments.
 // It is not possible to know the correct scope until the arguments are fully
 // built. At that point, endAggFunc can be used to find the correct scope.
 // If endAggFunc returns a different scope than startAggFunc, the columns
 // will be transferred to the correct scope by buildAggregateFunction.
+// startAggFunc 返回用于构建聚合参数的临时范围。 在完全构建参数之前，不可能知道正确的范围。
+// 此时，可以使用 endAggFunc 找到正确的范围。
+// 如果 endAggFunc 返回的范围与 startAggFunc 不同，则列将由 buildAggregateFunction 转移到正确的范围。
 func (s *scope) startAggFunc() *scope {
 	if s.inAgg {
 		panic(sqlerrors.NewAggInAggError())
@@ -655,6 +671,8 @@ func (s *scope) startAggFunc() *scope {
 // endAggFunc is called when the builder finishes building an aggregate
 // function. It is used in combination with startAggFunc to disallow nested
 // aggregates and prevent grouping errors while building aggregate arguments.
+// endAggFunc 在构建器完成构建聚合函数时调用。
+// 它与 startAggFunc 结合使用以禁止嵌套聚合并防止在构建聚合参数时出现分组错误。
 //
 // In addition, endAggFunc finds the correct groupby structure, given
 // that the aggregate references the columns in cols. The reference scope
@@ -662,6 +680,9 @@ func (s *scope) startAggFunc() *scope {
 // variables referenced by the aggregate (or the current scope if the aggregate
 // references no variables). endAggFunc also ensures that aggregate functions
 // are only used in a groupings scope.
+// 此外，endAggFunc 找到正确的 groupby 结构，假设聚合引用了 cols 中的列。
+// 引用范围是最接近当前范围的范围，该范围至少包含聚合引用的变量之一
+//（如果聚合未引用任何变量，则为当前范围）。 endAggFunc 还确保聚合函数仅在分组范围内使用。
 func (s *scope) endAggFunc(cols opt.ColSet) (g *groupby) {
 	if !s.inAgg {
 		panic(errors.AssertionFailedf("mismatched calls to start/end aggFunc"))
@@ -969,6 +990,7 @@ func makeUntypedTuple(labels []string, texprs []tree.TypedExpr) *tree.Tuple {
 //
 // NB: This code is adapted from sql/select_name_resolution.go and
 // sql/subquery.go.
+// 注意：此代码改编自 sql/select_name_resolution.go 和 sql/subquery.go。
 func (s *scope) VisitPre(expr tree.Expr) (recurse bool, newExpr tree.Expr) {
 	switch t := expr.(type) {
 	case *tree.AllColumnsSelector, *tree.TupleStar:
@@ -977,6 +999,9 @@ func (s *scope) VisitPre(expr tree.Expr) (recurse bool, newExpr tree.Expr) {
 		// encounter one here during expression analysis, it's being used
 		// as an argument to an inner expression/function. In that case,
 		// treat it as a tuple of the expanded columns.
+		// 准备好选择的呈现时，将替换 SELECT 子句顶层的 AllColumnsSelectors 和 TupleStars。
+		// 如果我们在表达式分析期间在这里遇到一个，它被用作内部表达式/函数的参数。
+		// 在这种情况下，将其视为扩展列的元组。
 		//
 		// Hence:
 		//    SELECT kv.* FROM kv                 -> SELECT k, v FROM kv
@@ -988,6 +1013,8 @@ func (s *scope) VisitPre(expr tree.Expr) (recurse bool, newExpr tree.Expr) {
 		// before type checking, and type checking will resolve the
 		// tuple's type. However we need to preserve the labels in
 		// case of e.g. `SELECT (kv.*).v`.
+		// 我们返回一个无类型的元组，因为名称解析发生在类型检查之前，类型检查将解析元组的类型。
+		// 但是，我们需要保留标签以防万一。 `SELECT (kv.*).v`。
 		return false, makeUntypedTuple(labels, exprs)
 
 	case *tree.UnresolvedName:
@@ -1148,6 +1175,8 @@ func isOrderedSetAggregate(def *tree.FunctionDefinition) (*tree.FunctionDefiniti
 // aggregate function. When an aggregateInfo is encountered during the build
 // process, it is replaced with a reference to the column returned by the
 // aggregation.
+// replaceAggregate 返回可用于替换原始聚合函数的聚合信息。
+// 当在构建过程中遇到 aggregateInfo 时，它会被替换为对聚合返回的列的引用。
 //
 // replaceAggregate also stores the aggregateInfo in the aggregation scope for
 // this aggregate, using the aggOutScope.groupby.aggs slice. The aggregation
@@ -1155,6 +1184,10 @@ func isOrderedSetAggregate(def *tree.FunctionDefinition) (*tree.FunctionDefiniti
 // the variables referenced by the aggregate (or the current scope if the
 // aggregate references no variables). The aggOutScope.groupby.aggs slice is
 // used later by the Builder to build aggregations in the aggregation scope.
+// replaceAggregate 还使用 aggOutScope.groupby.aggs 切片将
+// aggregateInfo 存储在此聚合的聚合范围中。 聚合范围是最接近当前范围的范围，
+// 它至少包含聚合引用的变量之一（如果聚合不引用变量，则为当前范围）。
+// Builder 稍后使用 aggOutScope.groupby.aggs 切片在聚合范围内构建聚合。
 func (s *scope) replaceAggregate(f *tree.FuncExpr, def *tree.FunctionDefinition) tree.Expr {
 	f, def = s.replaceCount(f, def)
 

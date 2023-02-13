@@ -47,15 +47,19 @@ var _ exec.Factory = &distSQLSpecExecFactory{}
 
 // distSQLPlanningMode indicates the planning mode in which
 // distSQLSpecExecFactory is operating.
+// distSQLPlanningMode 指示 distSQLSpecExecFactory 运行的计划模式。
 type distSQLPlanningMode int
 
 const (
 	// distSQLDefaultPlanning is the default planning mode in which the factory
 	// can create a physical plan with any plan distribution (local, partially
 	// distributed, or fully distributed).
+	// distSQLDefaultPlanning 是默认的计划模式，在该模式下，
+	// 工厂可以创建具有任何计划分布（本地、部分分布或完全分布）的物理计划。
 	distSQLDefaultPlanning distSQLPlanningMode = iota
 	// distSQLLocalOnlyPlanning is the planning mode in which the factory
 	// only creates local physical plans.
+	// distSQLLocalOnlyPlanning 是工厂只创建本地物理计划的计划模式。
 	distSQLLocalOnlyPlanning
 )
 

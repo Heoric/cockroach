@@ -4,15 +4,23 @@
 
 # SimplifySelectFilters simplifies the Filters operator in several possible
 # ways:
+# SimplifySelectFilters 以几种可能的方式简化了 Filters 运算符：
 #   - Removes True operands
+# 删除 True 操作数
 #   - Replaces the Filters operator with False if any operand is False or Null
+# 如果任何操作数为 False 或 Null，则将 Filters 运算符替换为 False
 #   - Flattens nested And operands by merging their conditions into parent
+# 通过将它们的条件合并到父对象中来展平嵌套的 And 操作数
 #   - Simplifies Or operands where one side is a Null to the other side
+# 将一侧为 Null 的 Or 操作数简化为另一侧
 #   - Simplifies Is operands where the right side is True or False
+# 简化右侧为 True 或 False 的 Is 操作数
 #
 # Note that the Null handling behavior is different than the SimplifyAnd rules,
 # because Filters only appears as a Select or Join filter condition, both of
 # which treat a Null filter conjunct exactly as if it were False.
+# 请注意，Null 处理行为与 SimplifyAnd 规则不同，因为 Filters 仅作为 Select 或 Join 过滤条件出现，
+# 两者都将 Null 过滤器合取完全视为 False。
 [SimplifySelectFilters, Normalize, HighPriority]
 (Select
     $input:*
@@ -33,6 +41,8 @@
 # ConsolidateSelectFilters consolidates filters that constrain a single
 # variable. For example, filters x >= 5 and x <= 10 would be combined into a
 # single Range operation.
+# ConsolidateSelectFilters 合并约束单个变量的过滤器。 例如，过滤器 x >= 5 和 x <= 10 将组合成一个
+# 单范围操作。
 #
 # The benefit of consolidating these filters is it allows a single constraint
 # to be generated for the variable instead of multiple. In the example above,
@@ -40,9 +50,13 @@
 # constraints [/5 - ] and [ - /10]. The single constraint allows us to better
 # estimate the selectivity of the predicate when calculating statistics for
 # the Select expression.
+# 合并这些过滤器的好处是它允许为变量生成单个约束而不是多个。
+# 在上面的示例中，我们可以生成单个约束 [/5 - /10] 而不是两个约束 [/5 - ] 和 [ - /10]。
+# 单一约束使我们能够在计算 Select 表达式的统计信息时更好地估计谓词的选择性。
 #
 # This rule is low priority so other rules in this file such as
 # RemoveNotNullCondition can run first.
+# 此规则的优先级较低，因此此文件中的其他规则（例如 RemoveNotNullCondition）可以先运行。
 [ConsolidateSelectFilters, Normalize, LowPriority]
 (Select $input:* $filters:* & (CanConsolidateFilters $filters))
 =>
@@ -65,6 +79,8 @@
 # EliminateSelect discards an unnecessary Select operator in the case where its
 # filter is always true. Keep this near the top of the file so that it tends to
 # be checked early.
+# EliminateSelect 在其过滤器始终为真的情况下丢弃不必要的 Select 运算符。
+# 将其保存在文件顶部附近，以便及早检查。
 [EliminateSelect, Normalize]
 (Select $input:* [])
 =>
@@ -72,6 +88,7 @@ $input
 
 # MergeSelects combines two nested Select operators into a single Select that
 # ANDs the filter conditions of the two Selects.
+# MergeSelects 将两个嵌套的 Select 运算符组合成一个 Select，将两个 Select 的过滤条件进行 AND 运算。
 [MergeSelects, Normalize]
 (Select (Select $input:* $innerFilters:*) $filters:*)
 =>
@@ -81,6 +98,9 @@ $input
 # is typically preferable because it minimizes the number of rows which Project
 # needs to process. This is especially important if Project is adding expensive
 # computed columns.
+# PushSelectIntoProject 将 Select 运算符推入其 Project 输入。
+# 这通常是可取的，因为它最大限度地减少了 Project 需要处理的行数。
+# 如果 Project 添加昂贵的计算列，这一点尤其重要。
 [PushSelectIntoProject, Normalize]
 (Select
     (Project $input:* $projections:* $passthrough:*)
@@ -110,9 +130,14 @@ $input
 # where the conditions could filter either left or right rows. The special case
 # where a condition filters only one or the other is already taken care of by
 # the PushSelectIntoJoin rules.
+# MergeSelectInnerJoin 将 Select 运算符与 InnerJoin 输入合并，
+# 方法是对每个过滤条件进行“与”运算，并创建一个具有该 On 条件的新 InnerJoin。
+# 只有在条件可以过滤左行或右行的一般情况下，使用 InnerJoin 才安全。
+# PushSelectIntoJoin 规则已经处理了条件仅过滤一个或另一个的特殊情况。
 # NOTE: Keep this rule ordered before the PushSelectIntoJoin rules to avoid
 #       missing out on the potential for new filter inference based on
 #       equivalent columns.
+# 保持此规则在 PushSelectIntoJoin 规则之前排序，以避免错过基于等效列的新过滤器推断的可能性。
 [MergeSelectInnerJoin, Normalize]
 (Select
     $input:(InnerJoin | InnerJoinApply
@@ -136,6 +161,8 @@ $input
 # equality columns from the ON condition of the join. It pushes the original
 # filter to the left side, and the mapped filter to the right side.
 # For example, consider this query:
+# PushSelectCondLeftIntoJoinLeftAndRight 适用于连接左侧的条件可以使用连接的
+# ON 条件中的相等列映射到右侧的情况。 它将原始过滤器推到左侧，将映射过滤器推到右侧。 例如，考虑这个查询：
 #
 #   SELECT * FROM l LEFT JOIN r ON l.x = r.x WHERE l.x = 5;
 #
@@ -152,6 +179,10 @@ $input
 # To ensure that this is the case, it's important that the filter only refers
 # to columns on the left side that have corresponding equivalent columns on
 # the right side.
+# 将过滤器从 SELECT 子句推送到 LEFT JOIN 的右侧通常是不正确的，
+# 因为这些行可能仍会在输出中显示为来自左侧的 NULL 扩展行。
+# 然而，在这种情况下，对于从右侧移除的任何行，匹配的行也从左侧移除（因此从输出中移除）。
+# 为确保是这种情况，重要的是过滤器仅引用左侧的列，这些列在右侧具有相应的等效列。
 [PushSelectCondLeftIntoJoinLeftAndRight, Normalize]
 (Select
     $input:(LeftJoin | LeftJoinApply | SemiJoin | SemiJoinApply
@@ -196,6 +227,9 @@ $input
 # and AntiJoin, as long as the condition has no dependencies on the right side
 # of the join. Right and Full joins are not eligible, since attempting to filter
 # left rows would just result in NULL left rows instead.
+# PushSelectIntoJoinLeft 将 Select 过滤条件推入输入 Join 的左侧。
+# 这在 InnerJoin、LeftJoin、SemiJoin 和 AntiJoin 的情况下是可能的，
+# 只要条件在连接的右侧没有依赖性。 右连接和全连接不符合条件，因为尝试过滤左行只会导致 NULL 左行。
 #
 #   -- No row is returned for a.x=1, a.y=2, b.x=1, since the WHERE excludes it.
 #   SELECT * FROM a RIGHT JOIN b ON a.x=b.x WHERE a.y < 0
@@ -236,14 +270,17 @@ $input
 
 # PushSelectIntoGroupBy pushes a Select condition below a GroupBy in the case
 # where it only references grouping columns or ConstAgg columns.
+# PushSelectIntoGroupBy 在仅引用分组列或 ConstAgg 列的情况下将 Select 条件推送到 GroupBy 下面。
 #
 # This rule doesn't work on ScalarGroupBy which exhibits different behavior if
 # the input is empty:
+# 此规则不适用于 ScalarGroupBy，如果输入为空，它会表现出不同的行为：
 #   SELECT MAX(y) FROM a
 #
 # If "a" is empty, this returns a single row containing a null value. This is
 # different behavior than a GroupBy with grouping columns, which would return
 # the empty set for a similar query:
+# 如果“a”为空，则返回包含空值的单行。 这与具有分组列的 GroupBy 的行为不同，后者会为类似查询返回空集：
 #   SELECT MAX(y) FROM a GROUP BY x
 #
 # Citations: [2]
@@ -251,6 +288,8 @@ $input
 # Note: Do not add EnsureDistinctOn to the match pattern. Pushing the select
 # filters through the EnsureDistinctOn can prevent it from detecting duplicate
 # rows and therefore change error behavior.
+# 注意：不要将 EnsureDistinctOn 添加到匹配模式中。
+# 通过 EnsureDistinctOn 推送选择过滤器可以防止它检测重复的行，从而改变错误行为。
 [PushSelectIntoGroupBy, Normalize]
 (Select
     $input:(GroupBy | DistinctOn
@@ -307,6 +346,9 @@ $input
 # the filters that are bound to the input columns of the ProjectSet are
 # pushed down into it, in hopes of being pushed down further into joins
 # and scans underneath the ProjectSet.
+# PushSelectIntoProjectSet 将过滤器推入 ProjectSet。
+# 特别是，绑定到 ProjectSet 的输入列的过滤器被向下推入其中，
+# 希望被进一步向下推入 ProjectSet 下的连接和扫描。
 [PushSelectIntoProjectSet, Normalize]
 (Select
     (ProjectSet $input:* $zip:*)
@@ -331,6 +373,7 @@ $input
 
 # PushFilterIntoSetOp pushes filters down to both the left and right sides
 # of all set operators. For example, consider this query:
+# PushFilterIntoSetOp 将过滤器向下推到所有集合运算符的左侧和右侧。 例如，考虑这个查询：
 #
 #   SELECT * FROM (SELECT x FROM a UNION ALL SELECT y FROM b) WHERE x < 5
 #
@@ -339,6 +382,10 @@ $input
 # the y column in the (b) table. Therefore our mapping becomes x < 5 in the
 # left side, and y <  5 in the right side. Given this mapping, we can now
 # safely push the filter down to both sides as follows:
+# 在这种情况下，我们可以将 x < 5 映射到两边，因为在 union 中 x out col
+# 对应于 (a) 表中的 x 列和 (b) 表中的 y 列。
+# 因此，我们的映射在左侧变为 x < 5，在右侧变为 y < 5。
+# 鉴于此映射，我们现在可以安全地将过滤器向下推到两侧，如下所示：
 #
 # SELECT * FROM (SELECT x FROM a UNION ALL SELECT y FROM b) WHERE x < 5
 # =>
@@ -348,12 +395,17 @@ $input
 # All, Except, Except All, Intersect, Intersect All) is logically equivalent
 # to filtering after applying the set operator. Here's some justification for
 # this claim:
+# 为每个集合运算符（Union、Union All、Except、Except All、Intersect、
+# Intersect All）下推（全部）过滤器在逻辑上等同于应用集合运算符后进行过滤。 这是这种说法的一些理由：
 #
 # Notice that each of the set operators this rule applies to, only works on
 # union compatible relations. The resulting column set after applying the set
 # operator, is also necessarily a subset of the column set of the (any)
 # relations it was composed of. And so, any filter applied must have a
 # corresponding column in each of the base relations.
+# 请注意，此规则适用的每个集合运算符仅适用于联合兼容关系。
+# 应用集合运算符后得到的列集也必然是它所组成的（任何）关系的列集的子集。
+# 因此，应用的任何过滤器在每个基本关系中都必须有一个对应的列。
 #
 # This works in the case of Union because a row passing the filter is
 # independent of the other rows in its relation. It works in the case of
@@ -361,6 +413,10 @@ $input
 # also be filtered from the LHS and RHS. It works in the case of Except because
 # if a row is filtered from the RHS, preventing its removal from the LHS, it
 # will also have been filtered from the LHS.
+# 这适用于 Union 的情况，因为通过过滤器的行独立于其关系中的其他行。
+# 它适用于 Intersect 的情况，因为如果从交集过滤掉一行 `a`，
+# 它也会从 LHS 和 RHS 中过滤掉。 它适用于 Except 的情况，
+# 因为如果一行从 RHS 中过滤掉，阻止它从 LHS 中删除，它也将被从 LHS 中过滤掉。
 #
 # Visualization of the rule:
 # Let A and B be sets. Let the filter be represented by eliminating some set C.
@@ -371,6 +427,7 @@ $input
 #
 # We don't push a filter down if it references outer columns because doing so
 # prevents decorrelation.
+# 如果过滤器引用外部列，我们不会下推过滤器，因为这样做可以防止解相关。
 [PushFilterIntoSetOp, Normalize]
 (Select
     $input:(Set $left:* $right:* $colmap:*)

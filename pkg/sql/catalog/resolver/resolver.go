@@ -104,14 +104,18 @@ func GetObjectNamesAndIDs(
 // ResolveExistingTableObject looks up an existing object.
 // If required is true, an error is returned if the object does not exist.
 // Optionally, if a desired descriptor type is specified, that type is checked.
+// ResolveExistingTableObject 查找现有对象。 如果 required 为真，则在对象不存在时返回错误。
+// 可选地，如果指定了所需的描述符类型，则检查该类型。
 //
 // The object name is modified in-place with the result of the name
 // resolution, if successful. It is not modified in case of error or
 // if no object is found.
+// 如果成功，对象名称将根据名称解析的结果进行就地修改。 如果出现错误或未找到对象，则不会对其进行修改。
 //
 // TODO(ajwerner): Remove this function. It mutates a table name in place,
 // which is lame but a common pattern and it throws away all the work of
 // resolving the prefix.
+// 删除此功能。 它就地改变了一个表名，这是一种蹩脚但常见的模式，它抛弃了解析前缀的所有工作。
 func ResolveExistingTableObject(
 	ctx context.Context, sc SchemaResolver, tn *tree.TableName, lookupFlags tree.ObjectLookupFlags,
 ) (prefix catalog.ResolvedObjectPrefix, res catalog.TableDescriptor, err error) {

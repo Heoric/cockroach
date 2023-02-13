@@ -78,12 +78,15 @@ func (b *Builder) dropOrderingAndExtraCols(s *scope) {
 // analyzeProjectionList analyzes the given list of SELECT clause expressions,
 // and adds the resulting aliases and typed expressions to outScope. See the
 // header comment for analyzeSelectList.
+// analyzeProjectionList 分析给定的 SELECT 子句表达式列表，
+// 并将生成的别名和类型化表达式添加到 outScope。 请参阅 analyzeSelectList 的标题注释。
 func (b *Builder) analyzeProjectionList(
 	selects tree.SelectExprs, desiredTypes []*types.T, inScope, outScope *scope,
 ) {
 	// We need to save and restore the previous values of the replaceSRFs field
 	// and the field in semaCtx in case we are recursively called within a
 	// subquery context.
+	// 我们需要保存和恢复 replaceSRFs 字段和 semaCtx 中字段的先前值，以防我们在子查询上下文中被递归调用。
 	defer b.semaCtx.Properties.Restore(b.semaCtx.Properties)
 	defer func(replaceSRFs bool) { inScope.replaceSRFs = replaceSRFs }(inScope.replaceSRFs)
 
@@ -116,18 +119,24 @@ func (b *Builder) analyzeReturningList(
 // analyzeReturningList. It normalizes names, expands wildcards, resolves types,
 // and adds resulting columns to outScope. The desiredTypes slice contains
 // target type hints for the resulting expressions.
+// analyzeSelectList 是 analyzeProjectionList 和 analyzeReturningList 使用的辅助函数。
+// 它标准化名称、扩展通配符、解析类型并将结果列添加到 outScope。
+// desiredTypes 切片包含结果表达式的目标类型提示。
 //
 // As a side-effect, the appropriate scopes are updated with aggregations
 // (scope.groupby.aggs)
+// 作为一个副作用，适当的范围被聚合更新（scope.groupby.aggs）
 func (b *Builder) analyzeSelectList(
 	selects tree.SelectExprs, desiredTypes []*types.T, inScope, outScope *scope,
 ) {
 	for i, e := range selects {
 		// Start with fast path, looking for simple column reference.
+		// 从快速路径开始，寻找简单的列引用。
 		texpr := b.resolveColRef(e.Expr, inScope)
 		if texpr == nil {
 			// Fall back to slow path. Pre-normalize any VarName so the work is
 			// not done twice below.
+			// 退回到慢速路径。 预先规范化任何 VarName，这样工作就不会在下面完成两次。
 			if err := e.NormalizeTopLevelVarName(); err != nil {
 				panic(err)
 			}
@@ -163,6 +172,7 @@ func (b *Builder) analyzeSelectList(
 		// Output column names should exactly match the original expression, so we
 		// have to determine the output column name before we perform type
 		// checking.
+		// 输出列名应该与原始表达式完全匹配，因此我们必须在执行类型检查之前确定输出列名。
 		if outScope.cols == nil {
 			outScope.cols = make([]scopeColumn, 0, len(selects))
 		}
@@ -184,6 +194,7 @@ func (b *Builder) buildProjectionList(inScope *scope, projectionsScope *scope) {
 
 // resolveColRef looks for the common case of a standalone column reference
 // expression, like this:
+// resolveColRef 查找独立列引用表达式的常见情况，如下所示：
 //
 //   SELECT ..., c, ... FROM ...
 //
@@ -198,6 +209,8 @@ func (b *Builder) resolveColRef(e tree.Expr, inScope *scope) tree.TypedExpr {
 			// Attempt to resolve as a TupleStar. We do not attempt to resolve
 			// as a TupleStar if we are inside a view definition because views
 			// do not support * expressions.
+			// 它可能是对表格的引用，例如  SELECT tbl FROM tbl。 尝试解析为 TupleStar。
+			// 如果我们在视图定义中，我们不会尝试解析为 TupleStar，因为视图不支持 * 表达式。
 			if !b.insideViewDef && sqlerrors.IsUndefinedColumnError(resolveErr) {
 				return func() tree.TypedExpr {
 					defer wrapColTupleStarPanic(resolveErr)
@@ -266,12 +279,20 @@ func (b *Builder) finishBuildScalar(
 // being constructed. If outScope is not nil, then finishBuildScalarRef adds the
 // column to outScope, either as a passthrough column (if it already exists in
 // the input scope), or a variable expression.
+// finishBuildScalarRef 构造对给定列的引用。 如果 outScope 为 nil，
+// 则 finishBuildScalarRef 返回一个引用该列的 Variable 表达式。
+// 该表达式可以嵌套在正在构造的更大的表达式中。 如果 outScope 不为 nil，
+// 则 finishBuildScalarRef 将列添加到 outScope，或者作为直通列（如果它已经存在于输入范围中），
+// 或者作为变量表达式。
 //
 // col      Column containing the scalar expression that's been referenced.
+//          包含已引用的标量表达式的列。
 // outCol   The output column which is being built. It can be nil if outScope is
 //          nil.
+//          正在构建的输出列。 如果 outScope 为 nil，则它可以为 nil。
 // colRefs  The set of columns referenced so far by the scalar expression being
 //          built. If not nil, it is updated with the ID of this column.
+//          到目前为止，正在构建的标量表达式引用的列集。 如果不是 nil，则使用此列的 ID 更新它。
 //
 // See Builder.buildStmt for a description of the remaining input and return
 // values.

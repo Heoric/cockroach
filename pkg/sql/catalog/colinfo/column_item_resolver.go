@@ -39,18 +39,23 @@ type ColumnItemResolver interface {
 	// than one data source matching tn. The srcMeta is subsequently
 	// passed to Resolve() if resolution succeeds. The prefix will not be
 	// modified.
+	// 如果有多个数据源与 tn 匹配，这一定会出现“不明确的表名”错误。
+	// 如果解析成功，srcMeta 随后将传递给 Resolve()。 前缀不会被修改。
 	FindSourceMatchingName(
 		ctx context.Context, tn tree.TableName,
 	) (res NumResolutionResults, prefix *tree.TableName, srcMeta ColumnSourceMeta, err error)
 
 	// FindSourceProvidingColumn searches for a data source providing
 	// a column with the name given.
+	// FindSourceProvidingColumn 搜索提供具有给定名称的列的数据源。
 	//
 	// This must error out with "ambiguous column name" if there is more
 	// than one data source matching tn, "column not found" if there is
 	// none. The srcMeta and colHints are subsequently passed to
 	// Resolve() if resolution succeeds. The prefix will not be
 	// modified.
+	// 如果有多个数据源匹配 tn，则必须返回“列名称不明确”错误，如果没有，则返回“未找到列”。
+	// 如果解析成功，srcMeta 和 colHints 随后将传递给 Resolve()。 前缀不会被修改。
 	FindSourceProvidingColumn(
 		ctx context.Context, col tree.Name,
 	) (prefix *tree.TableName, srcMeta ColumnSourceMeta, colHint int, err error)

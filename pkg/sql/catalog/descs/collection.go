@@ -68,6 +68,9 @@ func makeCollection(
 // collection is cleared using ReleaseAll() which is called at the
 // end of each transaction on the session, or on hitting conditions such
 // as errors, or retries that result in transaction timestamp changes.
+// Collection 是服务于 SQL 请求的单个会话或使用描述符的后台作业所持有的描述符集合。
+// 使用 ReleaseAll() 清除集合，该方法在会话中的每个事务结束时调用，
+// 或者在遇到错误等条件时调用，或者在重试导致事务时间戳更改时调用。
 type Collection struct {
 
 	// settings dictate whether we validate descriptors on write.

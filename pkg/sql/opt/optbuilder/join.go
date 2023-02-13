@@ -143,6 +143,9 @@ func (b *Builder) buildJoin(
 // tables from the left side of the join, and rightScope contains the
 // scopeColumns (and corresponding table names) from the right side of the
 // join.
+// validateJoinTableNames 检查表名在连接的左侧和右侧之间不重复。
+// leftTables 包含来自联接左侧的表的预构建映射，rightScope
+// 包含来自联接右侧的scopeColumns（以及相应的表名称）。
 func (b *Builder) validateJoinTableNames(leftScope, rightScope *scope) {
 	// Try to derive smaller subset of columns which need to be validated.
 	leftOrds := b.findJoinColsToValidate(leftScope)
@@ -235,11 +238,15 @@ func (b *Builder) constructJoin(
 // and creates equality predicate(s) with those columns. It also ensures that
 // there is a single output column for each match name (other columns with the
 // same name are hidden).
+// usingJoinBuilder 有助于构建 USING 连接或自然连接。
+// 它查找左右关系中与名称参数中提供的列（或在自然连接的情况下双方共同的名称）
+// 匹配的列，并使用这些列创建相等谓词。 它还确保每个匹配名称都有一个输出列（隐藏其他具有相同名称的列）。
 //
 // -- Merged columns --
 //
 // With NATURAL JOIN or JOIN USING (a,b,c,...), SQL allows us to refer to the
 // columns a,b,c directly; these columns have the following semantics:
+// 通过 NATURAL JOIN 或 JOIN USING (a,b,c,...)，SQL 允许我们直接引用列 a,b,c； 这些列具有以下语义：
 //   a = IFNULL(left.a, right.a)
 //   b = IFNULL(left.b, right.b)
 //   c = IFNULL(left.c, right.c)
@@ -250,12 +257,18 @@ func (b *Builder) constructJoin(
 // columns from the right table. To perform this rearrangement, we use a
 // projection on top of the join. Note that the original columns must
 // still be accessible via left.a, right.a (they will just be hidden).
+// 此外，星号必须按以下顺序解析列：合并列、左表中的非相等列、右表中的非相等列。
+// 为了执行此重新排列，我们在连接顶部使用投影。
+// 请注意，原始列仍然必须可以通过 left.a、right.a 访问（它们只是被隐藏）。
 //
 // For inner or left outer joins, a is always the same as left.a.
+// 对于内连接或左外连接，a 始终与 left.a 相同。
 //
 // For right outer joins, a is always equal to right.a; but for some types
 // (like collated strings), this doesn't mean it is the same as right.a. In
 // this case we must still use the IFNULL construct.
+// 对于右外连接，a 始终等于 right.a； 但对于某些类型（例如整理字符串），
+// 这并不意味着它与 right.a 相同。 在这种情况下，我们仍然必须使用 IFNULL 构造。
 //
 // Example:
 //
@@ -273,6 +286,7 @@ func (b *Builder) constructJoin(
 //    6: right.y
 //
 //  projection has columns and corresponding variable expressions:
+// 投影有列和相应的变量表达式：
 //    1: a aka left.a        @1
 //    2: b aka left.b        @2
 //    3: left.x              @3
@@ -281,6 +295,7 @@ func (b *Builder) constructJoin(
 //    6: right.y             @6
 //
 // If the join was a FULL OUTER JOIN, the columns would be:
+// 如果连接是 FULL OUTER JOIN，则列将为：
 //    1: a                   IFNULL(@1,@4)
 //    2: b                   IFNULL(@2,@5)
 //    3: left.a (hidden)     @1
@@ -303,10 +318,13 @@ type usingJoinBuilder struct {
 	// hideCols contains the join columns which are hidden in the result
 	// expression. Note that we cannot simply store the column ids since the
 	// same column may be used multiple times with different aliases.
+	// hideCols 包含隐藏在结果表达式中的连接列。
+	// 请注意，我们不能简单地存储列 ID，因为同一列可能会使用不同的别名多次使用。
 	hideCols map[*scopeColumn]struct{}
 
 	// ifNullCols contains the ids of each synthesized column which performs the
 	// IFNULL check for a pair of join columns.
+	// ifNullCols 包含每个合成列的 id，该合成列对一对连接列执行 IFNULL 检查。
 	ifNullCols opt.ColSet
 }
 

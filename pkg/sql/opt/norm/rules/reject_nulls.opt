@@ -3,6 +3,8 @@
 # on "null-rejecting filters". A null-rejecting filter on column x discards rows
 # in which the value of x is null. Many common SQL comparison expressions reject
 # null values, such as:
+# reject_nulls.opt 包含规范化规则，可简化基于“空值拒绝过滤器”的表达式。
+# 列 x 上的空值拒绝过滤器会丢弃 x 值为空的行。 许多常见的 SQL 比较表达式拒绝空值，例如：
 #
 #   x = 1          -- Rejects nulls on x
 #   y < 10         -- Rejects nulls on y
@@ -13,6 +15,8 @@
 # in turn unlocks additional rewrite rules that only work with inner joins. Some
 # of these rules are needed to fully decorrelate correlated subqueries, such as
 # this pattern:
+# 空拒绝分析用于将外连接简化为内连接。 这反过来又解锁了仅适用于内部联接的其他重写规则。
+# 需要其中一些规则来完全解除相关子查询的关联，例如此模式：
 #
 #   SELECT * FROM a WHERE (SELECT MIN(z) FROM b WHERE a.x=b.x) = a.y
 #
@@ -40,6 +44,9 @@
 # from the right side. The effect of the null-rejecting filter is that output
 # rows with all NULL values on the right side created by the left (or full) join
 # are eliminated, making the join equivalent to an inner (or right) join. For
+# RejectNullsLeftJoin 将 LeftJoin 运算符缩减为 InnerJoin 运算符
+#（或将 FullJoin 缩减为 RightJoin）当右侧的任何列上存在空值拒绝过滤器时。
+# 空值拒绝过滤器的作用是消除由左（或完全）连接创建的右侧所有 NULL 值的输出行，使连接等同于内部（或右）连接。
 # example:
 #
 #   SELECT * FROM a LEFT OUTER JOIN b ON a.x = b.x WHERE b.y < 5
@@ -49,6 +56,7 @@
 #   SELECT * FROM a INNER JOIN b ON a.x = b.x WHERE b.y < 5
 #
 # since b.y < 5 is a null-rejecting filter on the right side.
+# 因为 b.y < 5 是右侧的空值拒绝过滤器。
 #
 # This rule is marked as high priority so that it runs before Select filter
 # pushdown rules. Those rules may remove a filter before it's had a chance to
@@ -81,6 +89,8 @@
 # RejectNullsRightJoin is symmetric with RejectNullsLeftJoin. It reduces a
 # FullJoin operator to a LeftJoin when there is a null-rejecting filter on any
 # column from the left side.
+# RejectNullsRightJoin 与 RejectNullsLeftJoin 是对称的。
+# 当左侧的任何列上存在空值拒绝过滤器时，它会将 FullJoin 运算符简化为 LeftJoin。
 #
 # This rule is marked as high priority for the same reason as
 # RejectNullsLeftJoin.
@@ -203,12 +213,16 @@
 
 # RejectNullsProject adds a "col IS NOT NULL" null-rejecting filter to the input
 # of a project if the following conditions hold:
+# 如果满足以下条件，RejectNullsProject 会向项目的输入添加一个“col IS NOT NULL”空值拒绝过滤器：
 #   1. The parent Select operator rejects nulls on a synthesized (projection)
 #      column.
+#      父 Select 运算符拒绝合成（投影）列上的空值。
 #   2. At least one of the input columns of the projection is in the
 #      RejectNullCols ColSet of the input of the Project.
+#      投影的至少一个输入列在 Project 输入的 RejectNullCols ColSet 中。
 #   3. The projection 'transmits' NULLS from the candidate column; if the column
 #      is NULL, the output of the projection is NULL.
+#      投影从候选列“传输”NULLS； 如果该列为 NULL，则投影的输出为 NULL。
 [RejectNullsProject, Normalize]
 (Select
     $input:(Project

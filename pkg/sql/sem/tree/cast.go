@@ -43,23 +43,30 @@ import (
 // are three types of cast contexts: explicit, assignment, and implicit. Not all
 // casts can be performed in all contexts. See the description of each context
 // below for more details.
+// CastContext 表示可以执行转换的上下文。 存在三种类型的强制转换上下文：显式、赋值和隐式。
+// 并非所有类型转换都可以在所有上下文中执行。 有关更多详细信息，请参阅下面每个上下文的描述。
 //
 // The concept of cast contexts is taken directly from Postgres's cast behavior.
 // More information can be found in the Postgres documentation on type
 // conversion: https://www.postgresql.org/docs/current/typeconv.html
+// 转换上下文的概念直接取自 Postgres 的转换行为。 可以在有关类型转换的 Postgres 文档中找到更多信息
 type CastContext uint8
 
 const (
 	_ CastContext = iota
 	// CastContextExplicit is a cast performed explicitly with the syntax
 	// CAST(x AS T) or x::T.
+	// CastContextExplicit 是使用语法 CAST(x AS T) 或 x::T 显式执行的转换。
 	CastContextExplicit
 	// CastContextAssignment is a cast implicitly performed during an INSERT,
 	// UPSERT, or UPDATE statement.
+	// CastContextAssignment 是在 INSERT、UPSERT 或 UPDATE 语句期间隐式执行的强制转换。
 	CastContextAssignment
 	// CastContextImplicit is a cast performed implicitly. For example, the DATE
 	// below is implicitly cast to a TIMESTAMPTZ so that the values can be
 	// compared.
+	// CastContextImplicit 是隐式执行的转换。
+	// 例如，下面的 DATE 隐式转换为 TIMESTAMPTZ，以便可以比较这些值。
 	//
 	//   SELECT '2021-01-10'::DATE < now()
 	//
@@ -84,21 +91,28 @@ func (cc CastContext) String() string {
 // context (see cast.maxContext below). It is only used to annotate entries in
 // castMap and to perform assertions on cast entries in the init function. It
 // has no effect on the behavior of a cast.
+// contextOrigin 指示演员的最大上下文的信息源（请参阅下面的 cast.maxContext）。
+// 它仅用于注释 castMap 中的条目以及对 init 函数中的 cast 条目执行断言。 它对演员表的行为没有影响。
 type contextOrigin uint8
 
 const (
 	_ contextOrigin = iota
 	// contextOriginPgCast specifies that a cast's maximum context is based on
 	// information in Postgres's pg_cast table.
+	// contextOriginPgCast 指定转换的最大上下文基于 Postgres 的 pg_cast 表中的信息。
 	contextOriginPgCast
 	// contextOriginAutomaticIOConversion specifies that a cast's maximum
 	// context is not included in Postgres's pg_cast table. In Postgres's
 	// internals, these casts are evaluated by each data type's input and output
 	// functions.
+	// contextOriginAutomaticIOConversion 指定 cast 的最大上下文不包含在 Postgres
+	// 的 pg_cast 表中。 在 Postgres 的内部结构中，这些转换由每种数据类型的输入和输出函数进行评估。
 	//
 	// Automatic casts can only convert to or from string types [1]. Conversions
 	// to string types are assignment casts and conversions from string types
 	// are explicit casts [2]. These rules are asserted in the init function.
+	// 自动转换只能转换为字符串类型或从字符串类型转换 [1]。 到字符串类型的转换是赋值转换，
+	// 从字符串类型的转换是显式转换 [2]。 这些规则在 init 函数中声明。
 	//
 	// [1] https://www.postgresql.org/docs/13/catalog-pg-cast.html#CATALOG-PG-CAST
 	// [2] https://www.postgresql.org/docs/13/sql-createcast.html#SQL-CREATECAST-NOTES
@@ -106,6 +120,8 @@ const (
 	// contextOriginLegacyConversion is used for casts that are not supported by
 	// Postgres, but are supported by CockroachDB and continue to be supported
 	// for backwards compatibility.
+	// contextOriginLegacyConversion 用于 Postgres 不支持但受
+	// CockroachDB 支持并继续支持向后兼容的强制转换。
 	contextOriginLegacyConversion
 )
 
@@ -148,6 +164,9 @@ type cast struct {
 // cast struct that contains information about the cast. Some possible casts,
 // such as casts from the UNKNOWN type and casts from a type to the identical
 // type, are not defined in the castMap and are instead codified in ValidCast.
+// castMap 定义有效的转换。 它将源 OID 映射到目标 OID，再映射到包含有关转换信息的转换结构。
+// 一些可能的强制转换，例如从 UNKNOWN 类型的强制转换和从一个类型到相同类型的强制转换，
+// 没有在 castMap 中定义，而是在 ValidCast 中编码。
 //
 // Validation is performed on the map in init().
 //
@@ -155,6 +174,9 @@ type cast struct {
 // cast_map_gen.sh script. The script outputs some types that we do not support.
 // Those types were manually deleted. Entries with
 // contextOriginAutomaticIOConversion origin were manually added.
+// 具有 contextOriginPgCast 来源的条目由 cast_map_gen.sh 脚本自动生成。
+// 该脚本输出一些我们不支持的类型。 这些类型已被手动删除。
+// 带有 contextOriginAutomaticIOConversion 来源的条目是手动添加的。
 var castMap = map[oid.Oid]map[oid.Oid]cast{
 	oid.T_bit: {
 		oid.T_bit:    {maxContext: CastContextImplicit, origin: contextOriginPgCast, volatility: VolatilityImmutable},

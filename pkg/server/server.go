@@ -153,6 +153,9 @@ type Server struct {
 }
 
 // NewServer creates a Server from a server.Config.
+// 1. hlc
+// 2. engines  pebble
+// 3. grpc server
 func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	if err := cfg.ValidateAddrs(context.Background()); err != nil {
 		return nil, err
@@ -165,6 +168,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	}
 
 	var clock *hlc.Clock
+	// 1. hlc
 	if cfg.ClockDevicePath != "" {
 		clockSrc, err := hlc.MakeClockSource(context.Background(), cfg.ClockDevicePath)
 		if err != nil {
@@ -185,22 +189,29 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	stopper.AddCloser(cfg.AmbientCtx.Tracer)
 
 	// Add a dynamic log tag value for the node ID.
+	// 为节点 ID 添加动态日志标记值。
 	//
 	// We need to pass an ambient context to the various server components, but we
 	// won't know the node ID until we Start(). At that point it's too late to
 	// change the ambient contexts in the components (various background processes
 	// will have already started using them).
+	// 我们需要将环境上下文传递给各种服务器组件，但在我们启动 () 之前我们不会知道节点 ID。
+	// 到那时再更改组件中的环境上下文为时已晚（各种后台进程已经开始使用它们）。
 	//
 	// NodeIDContainer allows us to add the log tag to the context now and update
 	// the value asynchronously. It's not significantly more expensive than a
 	// regular tag since it's just doing an (atomic) load when a log/trace message
 	// is constructed. The node ID is set by the Store if this host was
 	// bootstrapped; otherwise a new one is allocated in Node.
+	// NodeIDContainer 允许我们现在将日志标记添加到上下文并异步更新值。
+	// 它并不比常规标签贵很多，因为它只是在构造日志/跟踪消息时进行（原子）加载。
+	// 如果该主机是自举的，则节点 ID 由 Store 设置； 否则在 Node 中分配一个新的。
 	nodeIDContainer := cfg.IDContainer
 	idContainer := base.NewSQLIDContainerForNode(nodeIDContainer)
 
 	ctx := cfg.AmbientCtx.AnnotateCtx(context.Background())
 
+	// 2. engines, pebble
 	engines, err := cfg.CreateEngines(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create engines")
@@ -276,6 +287,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	// and after ValidateAddrs().
 	rpcContext.CheckCertificateAddrs(ctx)
 
+	// 3. grpc server
 	grpcServer := newGRPCServer(rpcContext)
 
 	g := gossip.New(
@@ -313,6 +325,8 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	// A custom RetryOptions is created which uses stopper.ShouldQuiesce() as
 	// the Closer. This prevents infinite retry loops from occurring during
 	// graceful server shutdown
+	// 创建一个自定义 RetryOptions，它使用 stopper.ShouldQuiesce() 作为 Closer。
+	// 这可以防止在服务器正常关闭期间发生无限重试循环
 	//
 	// Such a loop occurs when the DistSender attempts a connection to the
 	// local server during shutdown, and receives an internal server error (HTTP
@@ -321,6 +335,10 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 	// However, on a single-node setup (such as a test), retries will never
 	// succeed because the only server has been shut down; thus, the
 	// DistSender needs to know that it should not retry in this situation.
+	// 当 DistSender 在关闭期间尝试连接到本地服务器并收到内部服务器错误（HTTP 代码 5xx）时，
+	// 会发生这样的循环。 这是服务器在关闭时返回的正确错误，通常可以在集群环境中重试。
+	// 但是，在单节点设置（例如测试）中，重试永远不会成功，因为唯一的服务器已关闭；
+	// 因此，DistSender 需要知道在这种情况下它不应该重试。
 	var clientTestingKnobs kvcoord.ClientTestingKnobs
 	if kvKnobs := cfg.TestingKnobs.KVClient; kvKnobs != nil {
 		clientTestingKnobs = *kvKnobs.(*kvcoord.ClientTestingKnobs)
@@ -341,6 +359,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (*Server, error) {
 		FirstRangeProvider: g,
 		TestingKnobs:       clientTestingKnobs,
 	}
+	// 4. distSender
 	distSender := kvcoord.NewDistSender(distSenderCfg)
 	registry.AddMetricStruct(distSender.Metrics())
 
@@ -932,11 +951,14 @@ func (s *Server) Start(ctx context.Context) error {
 
 // PreStart starts the server on the specified port, starts gossip and
 // initializes the node using the engines from the server's context.
+// PreStart 在指定端口上启动服务器，启动gossip并使用服务器上下文中的引擎初始化节点。
 //
 // It does not activate the pgwire listener over the network / unix
 // socket, which is done by the AcceptClients() method. The separation
 // between the two exists so that SQL initialization can take place
 // before the first client is accepted.
+// 它不会通过网络/unix 套接字激活 pgwire 侦听器，这是由 AcceptClients() 方法完成的。
+// 两者之间存在分离，因此可以在接受第一个客户端之前进行 SQL 初始化。
 //
 // PreStart is complex since it sets up the listeners and the associated
 // port muxing, but especially since it has to solve the
@@ -947,15 +969,24 @@ func (s *Server) Start(ctx context.Context) error {
 // services prematurely, which exposes a large surface of potentially
 // underinitialized services. This is avoided with some additional
 // complexity that can be summarized as follows:
+// PreStart 很复杂，因为它设置了侦听器和相关的端口复用，但特别是因为它必须解决“引导问题”：
+// 节点需要相当早地连接到 Gossip，但是驱动 Gossip 连接的是第一个范围副本 kv商店。
+// 这反过来又建议尽早打开 Gossip 服务器。 然而，天真地这样做也会过早地为大多数其他服务提供服务，
+// 这会暴露出大量潜在未初始化的服务。 这可以通过一些额外的复杂性来避免，这些复杂性可以总结如下：
 //
 // - before blocking trying to connect to the Gossip network, we already open
 //   the admin UI (so that its diagnostics are available)
+// - 在阻止尝试连接到 Gossip 网络之前，我们已经打开了管理 UI（以便其诊断可用）
 // - we also allow our Gossip and our connection health Ping service
+// - 我们还允许我们的 Gossip 和我们的连接健康 Ping 服务
 // - everything else returns Unavailable errors (which are retryable)
+// - 其他一切都返回不可用错误（可重试）
 // - once the node has started, unlock all RPCs.
+// - 节点启动后，解锁所有 RPC。
 //
 // The passed context can be used to trace the server startup. The context
 // should represent the general startup operation.
+// 传递的上下文可用于跟踪服务器启动。 上下文应该代表一般的启动操作。
 func (s *Server) PreStart(ctx context.Context) error {
 	ctx = s.AnnotateCtx(ctx)
 

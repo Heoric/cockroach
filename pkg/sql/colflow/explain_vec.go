@@ -82,6 +82,7 @@ func convertToVecTree(
 
 // fakeBatchReceiver exists for the sole purpose of convertToVecTree method. In
 // the production code it would have been sql.DistSQLReceiver.
+// fakeBatchReceiver 的存在只是为了 convertToVecTree 方法。 在生产代码中，它应该是 sql.DistSQLReceiver。
 type fakeBatchReceiver struct{}
 
 var _ execinfra.BatchReceiver = &fakeBatchReceiver{}

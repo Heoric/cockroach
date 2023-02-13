@@ -3582,12 +3582,17 @@ type IndexUsageStatsController interface {
 
 // EvalContext defines the context in which to evaluate an expression, allowing
 // the retrieval of state such as the node ID or statement start time.
+// EvalContext 定义在其中评估表达式的上下文，允许检索节点 ID 或语句开始时间等状态。
 //
 // ATTENTION: Some fields from this struct (particularly, but not exclusively,
 // from SessionData) are also represented in execinfrapb.EvalContext. Whenever
 // something that affects DistSQL execution is added, it needs to be marshaled
 // through that proto too.
 // TODO(andrei): remove or limit the duplication.
+// 注意：此结构中的某些字段（特别是但不限于来自 SessionData）也在
+// execinfrapb.EvalContext 中表示。 每当添加影响 DistSQL 执行的内容时，
+// 它也需要通过该原型进行编组。
+// TODO(andrei): 删除或限制重复。
 //
 // NOTE(andrei): EvalContext is dusty; it started as a collection of fields
 // needed by expression evaluation, but it has grown quite large; some of the
@@ -3595,6 +3600,10 @@ type IndexUsageStatsController interface {
 // In the sql package it is embedded by extendedEvalContext, which adds some
 // more fields from the sql package. Through that extendedEvalContext, this
 // struct now generally used by planNodes.
+// 注意（andrei）：EvalContext 满是灰尘； 它最初是表达式评估所需的字段集合，但它已经变得非常大；
+// 其中的一些东西似乎不属于这个低级包（例如 Planner）。
+// 在 sql 包中，它由 extendedEvalContext 嵌入，它从 sql 包中添加了更多字段。
+// 通过那个 extendedEvalContext，这个结构现在通常被 planNodes 使用。
 type EvalContext struct {
 	// SessionDataStack stores the session variables accessible by the correct
 	// context. Each element on the stack represents the beginning of a new
@@ -3795,6 +3804,8 @@ func (ctx *EvalContext) Copy() *EvalContext {
 // PushIVarContainer replaces the current IVarContainer with a different one -
 // pushing the current one onto a stack to be replaced later once
 // PopIVarContainer is called.
+// PushIVarContainer 将当前的 IVarContainer 替换为另一个 -
+// 将当前的 IVarContainer 推入堆栈，以便在调用 PopIVarContainer 后稍后替换。
 func (ctx *EvalContext) PushIVarContainer(c IndexedVarContainer) {
 	ctx.iVarContainerStack = append(ctx.iVarContainerStack, ctx.IVarContainer)
 	ctx.IVarContainer = c

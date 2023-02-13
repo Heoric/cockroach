@@ -47,6 +47,8 @@ import (
 // Main is the entry point for the cli, with a single line calling it intended
 // to be the body of an action package main `main` func elsewhere. It is
 // abstracted for reuse by duplicated `main` funcs in different distributions.
+// Main 是 cli 的入口点，有一行调用它旨在成为其他地方的动作包 main `main` func 的主体。
+// 它被抽象出来以供不同发行版中重复的“主要”功能重用。
 func Main() {
 	// Seed the math/rand RNG from crypto/rand.
 	rand.Seed(randutil.NewPseudoSeed())
@@ -314,6 +316,10 @@ func UsageAndErr(cmd *cobra.Command, args []string) error {
 // opening an http server that exposes the pprof endpoints on localhost. The
 // resturned shutdown function should be called at process exit to stop any
 // associated goroutines.
+// debugSignalSetup 为 SIGQUIT 和 SIGUSR2 设置信号处理程序以启用调试卡住或行为异常的进程，
+// 前者记录所有堆栈（但不终止进程，不像它的默认 go 处理程序），
+// 后者打开一个公开 pprof 的 http 服务器 本地主机上的端点。
+// 应该在进程退出时调用 returned 关闭函数以停止任何关联的 goroutine。
 func debugSignalSetup() func() {
 	exit := make(chan struct{})
 	ctx := context.Background()
@@ -322,6 +328,8 @@ func debugSignalSetup() func() {
 	// which point during execution we are. This makes it possible to use SIGQUIT
 	// to inspect a running process and determine what it is currently doing, even
 	// if it gets stuck somewhere.
+	// 对于 SIGQUIT，我们生成一个 goroutine 并且我们始终处理它，无论我们在执行期间的哪个点。
+	// 这使得使用 SIGQUIT 来检查正在运行的进程并确定它当前正在做什么成为可能，即使它卡在某个地方也是如此。
 	if quitSignal != nil {
 		quitSignalCh := make(chan os.Signal, 1)
 		signal.Notify(quitSignalCh, quitSignal)
@@ -344,6 +352,12 @@ func debugSignalSetup() func() {
 	// by default. The pprof endpoints however can be invaluable when inspecting
 	// a process that is behaving unexpectedly, thus this mechanism to request any
 	// cockroach process begin serving them when needed.
+	// 对于 SIGUSR，我们生成一个 goroutine，当收到信号时，它将启动一个 http 服务器，
+	// 绑定到 localhost，它为 go pprof 端点提供服务。
+	// 虽然 cockroach 服务器进程已经在其 HTTP 端口上提供这些服务，
+	// 但其他 CLI 命令，尤其是短期客户端命令，默认情况下不会打开 HTTP 端口。
+	// 然而，当检查一个行为异常的进程时，pprof 端点可能是无价的，
+	// 因此这种请求任何 cockroach 进程的机制在需要时开始为它们服务。
 	if debugSignal != nil {
 		debugSignalCh := make(chan os.Signal, 1)
 		signal.Notify(debugSignalCh, debugSignal)

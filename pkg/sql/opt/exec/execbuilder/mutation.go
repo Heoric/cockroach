@@ -889,20 +889,28 @@ func (b *Builder) buildFKCascades(withID opt.WithID, cascades memo.FKCascades) e
 // Mutations can commit the transaction as part of the same KV request,
 // potentially taking advantage of the 1PC optimization. This is not ok to do in
 // general; a sufficient set of conditions is:
+// Mutations 可以将事务作为同一 KV 请求的一部分提交，可能会利用 1PC 优化。
+// 一般来说，这样做是不行的； 一组充分的条件是：
 //   1. There is a single mutation in the query.
+// 		查询中有一个突变。
 //   2. The mutation is the root operator, or it is directly under a Project
 //      with no side-effecting expressions. An example of why we can't allow
 //      side-effecting expressions: if the projection encounters a
 //      division-by-zero error, the mutation shouldn't have been committed.
-//
+//      突变是根运算符，或者它直接在没有副作用表达式的项目下。
+//      为什么我们不允许有副作用的表达式的一个例子：如果投影遇到被零除错误，则不应该提交突变.
 // An extra condition relates to how the FK checks are run. If they run before
 // the mutation (via the insert fast path), auto commit is possible. If they run
 // after the mutation (the general path), auto commit is not possible. It is up
 // to the builder logic for each mutation to handle this.
+// 一个额外的条件与 FK 检查的运行方式有关。 如果它们在突变之前运行（通过插入快速路径），
+// 则自动提交是可能的。 如果它们在突变（一般路径）之后运行，则自动提交是不可能的。
+// 由每个突变的构建器逻辑来处理这个问题。
 //
 // Note that there are other necessary conditions related to execution
 // (specifically, that the transaction is implicit); it is up to the exec
 // factory to take that into account as well.
+// 请注意，还有其他与执行相关的必要条件（具体来说，交易是隐式的）； 执行工厂也要考虑到这一点。
 func (b *Builder) canAutoCommit(rel memo.RelExpr) bool {
 	if !rel.Relational().CanMutate {
 		// No mutations in the expression.

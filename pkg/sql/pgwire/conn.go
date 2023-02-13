@@ -59,6 +59,11 @@ import (
 // The connExecutor produces results for the commands, which are delivered to
 // the client through the sql.ClientComm interface, implemented by this conn
 // (code is in command_result.go).
+// conn 实现 pgwire 网络连接（协议的版本 3，由 Postgres v7.4 及更高版本实现）。
+// conn.serve() 读取协议消息，将它们转换成命令，
+// 然后推送到 StmtBuf（它们将被 connExecutor 拾取并执行）。
+// connExecutor 为命令生成结果，这些结果通过 sql.ClientComm 接口传递给客户端，
+// 由这个 conn 实现（代码在 command_result.go 中）。
 type conn struct {
 	conn net.Conn
 
@@ -67,33 +72,42 @@ type conn struct {
 
 	// startTime is the time when the connection attempt was first received
 	// by the server.
+	// startTime 是服务器首次接收到连接尝试的时间。
 	startTime time.Time
 
 	// rd is a buffered reader consuming conn. All reads from conn go through
 	// this.
+	// rd 是一个使用 conn 的缓冲读取器。 所有来自 conn 的读取都经过这个。
 	rd bufio.Reader
 
 	// parser is used to avoid allocating a parser each time.
+	// parser 用于避免每次都分配一个解析器。
 	parser parser.Parser
 
 	// stmtBuf is populated with commands queued for execution by this conn.
+	// stmtBuf 填充了排队等待此 conn 执行的命令。
 	stmtBuf sql.StmtBuf
 
 	// res is used to avoid allocations in the conn's ClientComm implementation.
+	// res 用于避免在 conn 的 ClientComm 实现中进行分配。
 	res commandResult
 
 	// err is an error, accessed atomically. It represents any error encountered
 	// while accessing the underlying network connection. This can read via
 	// GetErr() by anybody. If it is found to be != nil, the conn is no longer to
 	// be used.
+	// err 是一个错误，以原子方式访问。 它表示访问底层网络连接时遇到的任何错误。
+	// 任何人都可以通过 GetErr() 读取它。 如果发现是!= nil，则不再使用该conn。
 	err atomic.Value
 
 	// writerState groups together all aspects of the write-side state of the
 	// connection.
+	// writerState 将连接的写入端状态的所有方面组合在一起。
 	writerState struct {
 		fi flushInfo
 		// buf contains command results (rows, etc.) until they're flushed to the
 		// network connection.
+		// buf 包含命令结果（行等），直到它们被刷新到网络连接。
 		buf    bytes.Buffer
 		tagBuf [64]byte
 	}
@@ -102,43 +116,60 @@ type conn struct {
 	msgBuilder writeBuffer
 
 	// vecsScratch is a scratch space used by bufferBatch.
+	// vecsScratch 是 bufferBatch 使用的暂存空间。
 	vecsScratch coldata.TypedVecs
 
 	sv *settings.Values
 
 	// alwaysLogAuthActivity is used force-enables logging of authn events.
+	// alwaysLogAuthActivity 用于强制启用 authn 事件的日志记录。
 	alwaysLogAuthActivity bool
 
 	// afterReadMsgTestingKnob is called after reading every message.
+	// afterReadMsgTestingKnob 在读取每条消息后被调用。
 	afterReadMsgTestingKnob func(context.Context) error
 }
 
 // serveConn creates a conn that will serve the netConn. It returns once the
 // network connection is closed.
+// serveConn 创建一个将为 netConn 服务的连接。 一旦网络连接关闭，它就会返回。
 //
 // Internally, a connExecutor will be created to execute commands. Commands read
 // from the network are buffered in a stmtBuf which is consumed by the
 // connExecutor. The connExecutor produces results which are buffered and
 // sometimes synchronously flushed to the network.
+// 在内部，将创建一个 connExecutor 来执行命令。
+// 从网络读取的命令缓冲在 stmtBuf 中，由 connExecutor 使用。
+// connExecutor 产生的结果被缓冲，有时会同步刷新到网络。
 //
 // The reader goroutine (this one) outlives the connExecutor's goroutine (the
 // "processor goroutine").
+// 读取器 goroutine（这个）比 connExecutor 的 goroutine（“处理器 goroutine”）活得更久。
 // However, they can both signal each other to stop. Here's how the different
 // cases work:
+// 但是，它们都可以互相发出停止信号。 以下是不同案例的工作方式：
 // 1) The reader receives a ClientMsgTerminate protocol packet: the reader
 // closes the stmtBuf and also cancels the command processing context. These
 // actions will prompt the command processor to finish.
+// 阅读器收到ClientMsgTerminate协议包：阅读器关闭stmtBuf，同时取消命令处理上下文。
+// 这些操作将提示命令处理器完成。
 // 2) The reader gets a read error from the network connection: like above, the
 // reader closes the command processor.
+// 阅读器从网络连接中收到读取错误：如上，阅读器关闭命令处理器。
 // 3) The reader's context is canceled (happens when the server is draining but
 // the connection was busy and hasn't quit yet): the reader notices the canceled
 // context and, like above, closes the processor.
+// 读取器的上下文被取消（发生在服务器耗尽但连接繁忙且尚未退出时）：
+// 读取器注意到已取消的上下文，并像上面一样关闭处理器。
 // 4) The processor encounters an error. This error can come from various fatal
 // conditions encountered internally by the processor, or from a network
 // communication error encountered while flushing results to the network.
 // The processor will cancel the reader's context and terminate.
 // Note that query processing errors are different; they don't cause the
 // termination of the connection.
+// 处理器遇到错误。 此错误可能来自处理器内部遇到的各种致命情况，
+// 或者来自将结果刷新到网络时遇到的网络通信错误。
+// 处理器将取消读取器的上下文并终止。 请注意，查询处理错误是不同的； 它们不会导致连接终止。
 //
 // Draining notes:
 //
@@ -151,6 +182,12 @@ type conn struct {
 // first time a Sync command is processed outside of a transaction - the logic
 // being that we want to stop when we're both outside transactions and outside
 // batches.
+// 读者通过轮询传递给 serveImpl 的 IsDraining 闭包注意到服务器正在耗尽。
+// 那时，读者将关闭连接的责任委托给语句处理器：
+// 它会将 DrainRequest 推送到 stmtBuf，这会通知处理器尽快退出。
+// 如果当前不在事务中，处理器将在看到该命令后立即退出。
+// 如果它在一个事务中，它将等到第一次在事务外处理 Sync 命令
+// - 逻辑是我们希望在我们既在事务外又在批处理外时停止。
 func (s *Server) serveConn(
 	ctx context.Context,
 	netConn net.Conn,
@@ -178,6 +215,9 @@ func (s *Server) serveConn(
 // e.g. in multi-tenant setups in v20.2. This override mechanism
 // can be removed after all of CC is moved to use v21.1 or a version
 // which supports cluster settings.
+// alwaysLogAuthActivity 可以在集群设置无法可靠运行时无条件启用身份验证日志记录，
+// 例如 在 v20.2 的多租户设置中。 在所有 CC 移动到使用 v21.1 或支持集群设置的版本后，
+// 可以删除此覆盖机制。
 var alwaysLogAuthActivity = envutil.EnvOrDefaultBool("COCKROACH_ALWAYS_LOG_AUTHN_EVENTS", false)
 
 func newConn(
@@ -222,6 +262,8 @@ func (c *conn) sendError(ctx context.Context, execCfg *sql.ExecutorConfig, err e
 	// trying to send the client error. This is because clients that
 	// receive error payload are highly correlated with clients
 	// disconnecting abruptly.
+	// 我们可以，但不能，在尝试发送客户端错误时报告服务器端网络错误。
+	// 这是因为接收到错误负载的客户端与突然断开连接的客户端高度相关。
 	_ /* err */ = writeErr(ctx, &execCfg.Settings.SV, err, &c.msgBuilder, c.conn)
 	return err
 }
@@ -257,21 +299,30 @@ func (c *conn) authLogEnabled() bool {
 // maxRepeatedErrorCount is the number of times an error can be received
 // while reading from the network connection before the server decides to give
 // up and abort the connection.
+// maxRepeatedErrorCount 是在服务器决定放弃并中止连接之前从网络连接读取时可以接收到错误的次数。
 const maxRepeatedErrorCount = 1 << 15
 
 // serveImpl continuously reads from the network connection and pushes execution
 // instructions into a sql.StmtBuf, from where they'll be processed by a command
 // "processor" goroutine (a connExecutor).
+// serveImpl 不断地从网络连接中读取并将执行指令推送到 sql.StmtBuf 中，
+// 它们将由命令“处理器”goroutine（一个 connExecutor）从那里进行处理。
 // The method returns when the pgwire termination message is received, when
 // network communication fails, when the server is draining or when ctx is
 // canceled (which also happens when draining (but not from the get-go), and
 // when the processor encounters a fatal error).
+// 该方法在收到 pgwire 终止消息时返回，当网络通信失败时，
+// 当服务器正在耗尽或 ctx 被取消时（在耗尽时也会发生（但不是从一开始就发生），
+// 以及当处理器遇到 致命错误）。
 //
 // serveImpl always closes the network connection before returning.
+// serveImpl 总是在返回之前关闭网络连接。
 //
 // sqlServer is used to create the command processor. As a special facility for
 // tests, sqlServer can be nil, in which case the command processor and the
 // write-side of the connection will not be created.
+// sqlServer 用于创建命令处理器。 作为测试的特殊工具，sqlServer 可以为 nil，
+// 在这种情况下将不会创建命令处理器和连接的写入端。
 func (c *conn) serveImpl(
 	ctx context.Context,
 	draining func() bool,
@@ -307,21 +358,28 @@ func (c *conn) serveImpl(
 	// NOTE: We're going to write a few messages to the connection in this method,
 	// for the handshake. After that, all writes are done async, in the
 	// startWriter() goroutine.
+	// 注意：我们将在此方法中向连接写入一些消息，用于握手。
+	// 之后，所有写入都在 startWriter() goroutine 中异步完成。
 
 	ctx, cancelConn := context.WithCancel(ctx)
 	defer cancelConn() // This calms the linter that wants these callbacks to always be called.
+	// 这使希望始终调用这些回调的 linter 平静下来。
 
 	var sentDrainSignal bool
 	// The net.Conn is switched to a conn that exits if the ctx is canceled.
+	// 如果 ctx 被取消，net.Conn 将切换为退出的连接。
 	c.conn = NewReadTimeoutConn(c.conn, func() error {
 		// If the context was canceled, it's time to stop reading. Either a
 		// higher-level server or the command processor have canceled us.
+		// 如果上下文被取消，就该停止读取了。 更高级别的服务器或命令处理器已取消我们。
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		// If the server is draining, we'll let the processor know by pushing a
 		// DrainRequest. This will make the processor quit whenever it finds a good
 		// time.
+		// 如果服务器正在耗尽，我们将通过推送 DrainRequest 通知处理器。
+		// 这将使处理器在找到合适的时间时退出。
 		if !sentDrainSignal && draining() {
 			_ /* err */ = c.stmtBuf.Push(ctx, sql.DrainRequest{})
 			sentDrainSignal = true
@@ -332,20 +390,26 @@ func (c *conn) serveImpl(
 
 	// the authPipe below logs authentication messages iff its auth
 	// logger is non-nil. We define this here.
+	// 下面的 authPipe 记录身份验证消息，前提是它的身份验证记录器是非零的。 我们在这里定义它。
 	logAuthn := !inTestWithoutSQL && c.authLogEnabled()
 
 	// We'll build an authPipe to communicate with the authentication process.
+	// 我们将构建一个 authPipe 来与身份验证过程进行通信。
 	authPipe := newAuthPipe(c, logAuthn, authOpt, c.sessionArgs.User)
 	var authenticator authenticatorIO = authPipe
 
 	// procCh is the channel on which we'll receive the termination signal from
 	// the command processor.
+	// procCh 是我们将从命令处理器接收终止信号的通道。
 	var procCh <-chan error
 
 	// We need a value for the unqualified int size here, but it is controlled
 	// by a session variable, and this layer doesn't have access to the session
 	// data. The callback below is called whenever default_int_size changes.
 	// It happens in a different goroutine, so it has to be changed atomically.
+	// 我们在这里需要一个非限定 int 大小的值，但它由会话变量控制，并且该层无权访问会话数据。
+	// 只要 default_int_size 发生变化，就会调用下面的回调。
+	// 它发生在不同的 goroutine 中，因此必须以原子方式更改它。
 	var atomicUnqualifiedIntSize = new(int32)
 	onDefaultIntSizeChange := func(newSize int32) {
 		atomic.StoreInt32(atomicUnqualifiedIntSize, newSize)
@@ -355,6 +419,8 @@ func (c *conn) serveImpl(
 		// Spawn the command processing goroutine, which also handles connection
 		// authentication). It will notify us when it's done through procCh, and
 		// we'll also interact with the authentication process through ac.
+		// 产生命令处理 goroutine，它也处理连接认证）。
+		// 它会在完成时通过 procCh 通知我们，我们还将通过 ac 与身份验证过程进行交互。
 		var ac AuthConn = authPipe
 		procCh = c.processCommandsAsync(
 			ctx,
@@ -491,6 +557,10 @@ func (c *conn) serveImpl(
 				// an error while peeking (for example, there are no bytes in the
 				// buffer), the error is ignored since it will be handled on the next
 				// loop iteration.
+				// 为了支持 1PC txn 快速路径，我们查看下一个命令以查看它是否是 Sync。
+				// 这是因为在扩展协议中，在看到 Sync 之前，隐式事务无法提交。
+				// 如果在查看时出现错误（例如，缓冲区中没有字节），
+				// 该错误将被忽略，因为它将在下一次循环迭代中处理。
 				followedBySync := false
 				if nextMsgType, err := c.rd.Peek(1); err == nil &&
 					pgwirebase.ClientMessageType(nextMsgType[0]) == pgwirebase.ClientMsgSync {
@@ -518,6 +588,8 @@ func (c *conn) serveImpl(
 				// We're starting a batch here. If the client continues using the extended
 				// protocol and encounters an error, everything until the next sync
 				// message has to be skipped. See:
+				// 我们在这里开始一批。 如果客户端继续使用扩展协议并遇到错误，
+				// 则必须跳过下一个同步消息之前的所有内容。 看：
 				// https://www.postgresql.org/docs/current/10/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
 
 				return false, isSimpleQuery, c.stmtBuf.Push(ctx, sql.Sync{})
@@ -530,6 +602,8 @@ func (c *conn) serveImpl(
 				// state will happen when an error occurs on the server-side during a copy
 				// operation: the server will send an error and a ready message back to
 				// the client, and must then ignore further copy messages. See:
+				// 根据协议规范，我们应该忽略这些消息。 当在复制操作期间服务器端发生错误时，
+				// 将发生此状态：服务器将向客户端发送错误和就绪消息，然后必须忽略进一步的复制消息。 看：
 				// https://github.com/postgres/postgres/blob/6e1dd2773eb60a6ab87b27b8d9391b756e904ac3/src/backend/tcop/postgres.c#L4295
 				return false, isSimpleQuery, nil
 			default:
@@ -568,22 +642,32 @@ func (c *conn) serveImpl(
 	// goroutine stop. Depending on what that goroutine is currently doing (or
 	// blocked on), we cancel and close all the possible channels to make sure we
 	// tickle it in the right way.
+	// 我们已经完成从客户端读取数据，所以让通信 goroutine 停止。
+	// 根据 goroutine 当前正在做什么（或被阻塞），
+	// 我们取消并关闭所有可能的通道以确保我们以正确的方式触发它。
 
 	// Signal command processing to stop. It might be the case that the processor
 	// canceled our context and that's how we got here; in that case, this will
 	// be a no-op.
+	// 信号命令处理停止。 处理器可能取消了我们的上下文，这就是我们到达这里的方式；
+	// 在那种情况下，这将是一个空操作。
 	c.stmtBuf.Close()
 	// Cancel the processor's context.
 	cancelConn()
 	// In case the authenticator is blocked on waiting for data from the client,
 	// tell it that there's no more data coming. This is a no-op if authentication
 	// was completed already.
+	// 如果身份验证器在等待来自客户端的数据时被阻塞，请告诉它没有更多数据传来。
+	// 如果身份验证已经完成，则这是一个空操作。
 	authenticator.noMorePwdData()
 
 	// Wait for the processor goroutine to finish, if it hasn't already. We're
 	// ignoring the error we get from it, as we have no use for it. It might be a
 	// connection error, or a context cancelation error case this goroutine is the
 	// one that triggered the execution to stop.
+	// 等待处理器 goroutine 完成，如果它还没有完成的话。
+	// 我们忽略了从中得到的错误，因为我们对它没有用。
+	// 它可能是连接错误，或者是上下文取消错误，这个 goroutine 是触发执行停止的 goroutine。
 	<-procCh
 
 	if terminateSeen {
@@ -591,6 +675,7 @@ func (c *conn) serveImpl(
 	}
 	// If we're draining, let the client know by piling on an AdminShutdownError
 	// and flushing the buffer.
+	// 如果我们正在耗尽，通过堆积 AdminShutdownError 并刷新缓冲区让客户端知道。
 	if draining() {
 		// TODO(andrei): I think sending this extra error to the client if we also
 		// sent another error for the last query (like a context canceled) is a bad
@@ -605,23 +690,34 @@ func (c *conn) serveImpl(
 
 // processCommandsAsync spawns a goroutine that authenticates the connection and
 // then processes commands from c.stmtBuf.
+// processCommandsAsync 生成一个 goroutine，该 goroutine 对连接进行身份验证，
+// 然后处理来自 c.stmtBuf 的命令。
 //
 // It returns a channel that will be signaled when this goroutine is done.
 // Whatever error is returned on that channel has already been written to the
 // client connection, if applicable.
+// 它返回一个通道，当这个 goroutine 完成时，该通道将发出信号。
+// 如果适用，该通道上返回的任何错误都已写入客户端连接。
 //
 // If authentication fails, this goroutine finishes and, as always, cancelConn
 // is called.
+// 如果身份验证失败，则此 goroutine 结束，并且一如既往地调用 cancelConn。
 //
 // Args:
 // ac: An interface used by the authentication process to receive password data
 //   and to ultimately declare the authentication successful.
+// ac: 身份验证过程用来接收密码数据并最终声明身份验证成功的接口。
 // reserved: Reserved memory. This method takes ownership.
+// 保留：保留内存。 此方法获取所有权。
 // cancelConn: A function to be called when this goroutine exits. Its goal is to
 //   cancel the connection's context, thus stopping the connection's goroutine.
 //   The returned channel is also closed before this goroutine dies, but the
 //   connection's goroutine is not expected to be reading from that channel
 //   (instead, it's expected to always be monitoring the network connection).
+// cancelConn：这个 goroutine 退出时调用的函数。
+//   它的目标是取消连接的上下文，从而停止连接的 goroutine。
+//   返回的通道也在这个 goroutine 死亡之前关闭，
+//   但是连接的 goroutine 不应该从那个通道读取（相反，它应该始终监视网络连接）。
 func (c *conn) processCommandsAsync(
 	ctx context.Context,
 	authOpt authOptions,
@@ -633,6 +729,7 @@ func (c *conn) processCommandsAsync(
 ) <-chan error {
 	// reservedOwned is true while we own reserved, false when we pass ownership
 	// away.
+	// reservedOwned 在我们拥有保留时为真，在我们放弃所有权时为假。
 	reservedOwned := true
 	retCh := make(chan error, 1)
 	go func() {
@@ -686,6 +783,7 @@ func (c *conn) processCommandsAsync(
 		}()
 
 		// Authenticate the connection.
+		// 验证连接。
 		if connCloseAuthHandler, retErr = c.handleAuthentication(
 			ctx, ac, authOpt, sqlServer.GetExecutorConfig(),
 		); retErr != nil {
@@ -703,27 +801,33 @@ func (c *conn) processCommandsAsync(
 		}
 
 		// Inform the client of the default session settings.
+		// 通知客户端默认会话设置。
 		connHandler, retErr = c.sendInitialConnData(ctx, sqlServer, onDefaultIntSizeChange)
 		if retErr != nil {
 			return
 		}
 		// Signal the connection was established to the authenticator.
+		// 向身份验证器发出连接已建立的信号。
 		ac.AuthOK(ctx)
 		ac.LogAuthOK(ctx)
 
 		// We count the connection establish latency until we are ready to
 		// serve a SQL query. It includes the time it takes to authenticate and
 		// send the initial ReadyForQuery message.
+		// 我们计算连接建立延迟，直到我们准备好提供 SQL 查询。
+		// 它包括验证和发送初始 ReadyForQuery 消息所需的时间。
 		duration := timeutil.Since(c.startTime).Nanoseconds()
 		c.metrics.ConnLatency.RecordValue(duration)
 
 		// Mark the authentication as succeeded in case a panic
 		// is thrown below and we need to report to the client
 		// using the defer above.
+		// 将身份验证标记为成功，以防下面抛出恐慌，我们需要使用上面的 defer 向客户端报告。
 		authOK = true
 
 		// Now actually process commands.
 		reservedOwned = false // We're about to pass ownership away.
+		// 我们即将放弃所有权。
 		retErr = sqlServer.ServeConn(ctx, connHandler, reserved, cancelConn)
 	}()
 	return retCh
@@ -769,6 +873,8 @@ func (c *conn) sendInitialConnData(
 	// overlaps partially with session variables. The client wants to
 	// see the values that result from the combination of server-side
 	// defaults with client-provided values.
+	// 向客户端发送初始的“状态参数”。 这与会话变量部分重叠。
+	// 客户端希望查看由服务器端默认值与客户端提供的值组合产生的值。
 	// For details see: https://www.postgresql.org/docs/10/static/libpq-status.html
 	for _, param := range statusReportParams {
 		param := param
@@ -811,6 +917,7 @@ func (c *conn) sendReadyForQuery(queryCancelKey pgwirecancel.BackendKeyData) err
 
 // An error is returned iff the statement buffer has been closed. In that case,
 // the connection should be considered toast.
+// 如果语句缓冲区已关闭，则返回错误。 在这种情况下，连接应该被视为 toast。
 func (c *conn) handleSimpleQuery(
 	ctx context.Context,
 	buf *pgwirebase.ReadBuffer,
@@ -844,12 +951,16 @@ func (c *conn) handleSimpleQuery(
 		// The CopyFrom statement is special. We need to detect it so we can hand
 		// control of the connection, through the stmtBuf, to a copyMachine, and
 		// block this network routine until control is passed back.
+		// CopyFrom 语句比较特殊。 我们需要检测它，以便我们可以通过 stmtBuf
+		// 将连接控制权交给 copyMachine，并阻止此网络例程，直到控制权传回。
 		if cp, ok := stmts[i].AST.(*tree.CopyFrom); ok {
 			if len(stmts) != 1 {
 				// NOTE(andrei): I don't know if Postgres supports receiving a COPY
 				// together with other statements in the "simple" protocol, but I'd
 				// rather not worry about it since execution of COPY is special - it
 				// takes control over the connection.
+				// 我不知道 Postgres 是否支持接收 COPY 以及“简单”协议中的其他语句，
+				// 但我不想担心它，因为 COPY 的执行是特殊的——它控制连接。
 				return c.stmtBuf.Push(
 					ctx,
 					sql.SendError{
@@ -1156,6 +1267,7 @@ func (c *conn) handleBind(ctx context.Context, buf *pgwirebase.ReadBuffer) error
 
 // An error is returned iff the statement buffer has been closed. In that case,
 // the connection should be considered toast.
+// 如果语句缓冲区已关闭，则返回错误。 在这种情况下，连接应该被视为 toast。
 func (c *conn) handleExecute(
 	ctx context.Context, buf *pgwirebase.ReadBuffer, timeReceived time.Time, followedBySync bool,
 ) error {
@@ -1775,11 +1887,14 @@ var testingStatusReportParams = map[string]string{
 
 // readTimeoutConn overloads net.Conn.Read by periodically calling
 // checkExitConds() and aborting the read if an error is returned.
+// readTimeoutConn 通过定期调用 checkExitConds() 并在返回错误时中止读取来重载 net.Conn.Read。
 type readTimeoutConn struct {
 	net.Conn
 	// checkExitConds is called periodically by Read(). If it returns an error,
 	// the Read() returns that error. Future calls to Read() are allowed, in which
 	// case checkExitConds() will be called again.
+	// checkExitConds 由 Read() 定期调用。 如果它返回错误，则 Read() 返回该错误。
+	// 允许将来调用 Read()，在这种情况下将再次调用 checkExitConds()。
 	checkExitConds func() error
 }
 
@@ -1796,10 +1911,13 @@ func (c *readTimeoutConn) Read(b []byte) (int, error) {
 	// read before checking for exit conditions. The tradeoff is between the
 	// time it takes to react to session context cancellation and the overhead
 	// of waking up and checking for exit conditions.
+	// readTimeout 是 ReadTimeoutConn 在检查退出条件之前应等待读取的时间量。
+	// 折衷是在对会话上下文取消做出反应所需的时间与唤醒和检查退出条件的开销之间。
 	const readTimeout = 1 * time.Second
 
 	// Remove the read deadline when returning from this function to avoid
 	// unexpected behavior.
+	// 从此函数返回时删除读取截止时间以避免意外行为。
 	defer func() { _ = c.SetReadDeadline(time.Time{}) }()
 	for {
 		if err := c.checkExitConds(); err != nil {

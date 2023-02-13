@@ -20,6 +20,7 @@
 #
 # This normalization makes conjuncts easier to traverse for other rules, such as
 # the ExtractRedundantConjunct rule.
+# 这种规范化使得连词更容易遍历其他规则，例如 ExtractRedundantConjunct 规则。
 [NormalizeNestedAnds, Normalize]
 (And $left:* (And $innerLeft:* $innerRight:*))
 =>

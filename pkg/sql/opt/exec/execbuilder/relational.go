@@ -50,12 +50,16 @@ type execPlan struct {
 	// outputCols is a map from opt.ColumnID to exec.NodeColumnOrdinal. It maps
 	// columns in the output set of a relational expression to indices in the
 	// result columns of the exec.Node.
+	// outputCols 是从 opt.ColumnID 到 exec.NodeColumnOrdinal 的映射。
+	// 它将关系表达式的输出集中的列映射到 exec.Node 的结果列中的索引。
 	//
 	// The reason we need to keep track of this (instead of using just the
 	// relational properties) is that the relational properties don't force a
 	// single "schema": any ordering of the output columns is possible. We choose
 	// the schema that is most convenient: for scans, we use the table's column
 	// ordering. Consider:
+	// 我们需要跟踪这个（而不是只使用关系属性）的原因是关系属性不强制单个“模式”：
+	// 输出列的任何排序都是可能的。 我们选择最方便的模式：对于扫描，我们使用表的列排序。 考虑：
 	//   SELECT a, b FROM t WHERE a = b
 	// and the following two cases:
 	//   1. The table is defined as (k INT PRIMARY KEY, a INT, b INT). The scan will
@@ -67,15 +71,20 @@ type execPlan struct {
 	// An alternative to this would be to always use a "canonical" schema, for
 	// example the output columns in increasing index order. However, this would
 	// require a lot of otherwise unnecessary projections.
+	// 另一种方法是始终使用“规范”模式，例如按索引顺序递增的输出列。 但是，这将需要大量其他不必要的预测。
 	//
 	// Note: conceptually, this could be a ColList; however, the map is more
 	// convenient when converting VariableOps to IndexedVars.
+	// 注意：从概念上讲，这可能是一个 ColList；
+	// 但是，在将 VariableOps 转换为 IndexedVars 时，映射更方便。
 	outputCols opt.ColMap
 }
 
 // numOutputCols returns the number of columns emitted by the execPlan's Node.
 // This will typically be equal to ep.outputCols.Len(), but might be different
 // if the node outputs the same optimizer ColumnID multiple times.
+// numOutputCols 返回 execPlan 节点发出的列数。
+// 这通常等于 ep.outputCols.Len()，但如果节点多次输出相同的优化器 ColumnID，则可能不同。
 // TODO(justin): we should keep track of this instead of computing it each time.
 func (ep *execPlan) numOutputCols() int {
 	return numOutputColsInMap(ep.outputCols)
@@ -83,6 +92,7 @@ func (ep *execPlan) numOutputCols() int {
 
 // numOutputColsInMap returns the number of slots required to fill in all of
 // the columns referred to by this ColMap.
+// numOutputColsInMap 返回填充此 ColMap 引用的所有列所需的槽数。
 func numOutputColsInMap(m opt.ColMap) int {
 	max, ok := m.MaxValue()
 	if !ok {
@@ -93,6 +103,7 @@ func numOutputColsInMap(m opt.ColMap) int {
 
 // makeBuildScalarCtx returns a buildScalarCtx that can be used with expressions
 // that refer the output columns of this plan.
+// makeBuildScalarCtx 返回一个 buildScalarCtx，它可以与引用此计划的输出列的表达式一起使用。
 func (ep *execPlan) makeBuildScalarCtx() buildScalarCtx {
 	return buildScalarCtx{
 		ivh:     tree.MakeIndexedVarHelper(nil /* container */, ep.numOutputCols()),
@@ -158,6 +169,9 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 		// `BEGIN; INSERT INTO ...; CREATE TABLE IF NOT EXISTS ...; COMMIT;`
 		// where the table already exists. This will generate some false schema
 		// cache refreshes, but that's expected to be quite rare in practice.
+		// 这将为包含无效的模式修改语句的事务设置系统数据库触发器，
+		// 例如 `BEGIN; INSERT INTO ...; CREATE TABLE IF NOT EXISTS ...; COMMIT;`
+		// 表已经存在的地方。 这将生成一些错误的模式缓存刷新，但预计这种情况在实践中很少见。
 		if !b.evalCtx.Settings.Version.IsActive(
 			b.evalCtx.Ctx(), clusterversion.DisableSystemConfigGossipTrigger,
 		) {
@@ -174,6 +188,7 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 	if opt.IsMutationOp(e) {
 		b.ContainsMutation = true
 		// Raise error if mutation op is part of a read-only transaction.
+		// 如果 mutation op 是只读事务的一部分，则引发错误。
 		if b.evalCtx.TxnReadOnly {
 			return execPlan{}, pgerror.Newf(pgcode.ReadOnlySQLTransaction,
 				"cannot execute %s in a read-only transaction", b.statementTag(e))
@@ -181,6 +196,7 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 	}
 
 	// Raise error if bounded staleness is used incorrectly.
+	// 如果有界陈旧使用不当，则引发错误。
 	if b.boundedStaleness() {
 		if _, ok := boundedStalenessAllowList[e.Op()]; !ok {
 			return execPlan{}, unimplemented.NewWithIssuef(67562,
@@ -190,6 +206,7 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 	}
 
 	// Collect usage telemetry for relational node, if appropriate.
+	// 如果合适，收集关系节点的使用遥测数据。
 	if !b.disableTelemetry {
 		if c := opt.OpTelemetryCounters[e.Op()]; c != nil {
 			telemetry.Inc(c)
@@ -200,8 +217,10 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 	if b.nameGen != nil {
 		// Don't save tables for operators that don't produce any columns (most
 		// importantly, for SET which is used to disable saving of tables).
+		// 不要为不生成任何列的运算符保存表（最重要的是，对于用于禁用表保存的 SET）。
 		if !e.Relational().OutputCols.Empty() {
 			// This function must be called in a pre-order traversal of the tree.
+			// 此函数必须在树的预序遍历中调用。
 			saveTableName = b.nameGen.GenerateName(e.Op())
 		}
 	}
@@ -2090,12 +2109,14 @@ func (b *Builder) buildRecursiveCTE(rec *memo.RecursiveCTEExpr) (execPlan, error
 
 	// Renumber the columns so they match the columns expected by the recursive
 	// query.
+	// 对列重新编号，以便它们与递归查询所需的列相匹配。
 	initial.outputCols = util.FastIntMap{}
 	for i, col := range rec.OutCols {
 		initial.outputCols.Set(int(col), i)
 	}
 
 	// To implement exec.RecursiveCTEIterationFn, we create a special Builder.
+	// 为了实现 exec.RecursiveCTEIterationFn，我们创建了一个特殊的 Builder。
 
 	innerBldTemplate := &Builder{
 		mem:     b.mem,
@@ -2105,6 +2126,8 @@ func (b *Builder) buildRecursiveCTE(rec *memo.RecursiveCTEExpr) (execPlan, error
 		// below will add to withExprs. Cap the slice to force reallocation on any
 		// appends, so that they don't overwrite overwrite later appends by our
 		// original builder.
+		// 如果递归查询本身包含 CTE，在下面的函数中构建它会添加到 withExprs。
+		// 限制切片以强制重新分配任何追加，这样它们就不会覆盖我们原始构建器稍后追加的内容。
 		withExprs: b.withExprs[:len(b.withExprs):len(b.withExprs)],
 	}
 
@@ -2530,6 +2553,8 @@ func (b *Builder) buildOpaque(opaque *memo.OpaqueRelPrivate) (execPlan, error) {
 // needProjection figures out what projection is needed on top of the input plan
 // to produce the given list of columns. If the input plan already produces
 // the columns (in the same order), returns needProj=false.
+// needProjection 计算出在输入计划之上需要什么投影来生成给定的列列表。
+// 如果输入计划已经生成列（以相同的顺序），则返回 needProj=false。
 func (b *Builder) needProjection(
 	input execPlan, colList opt.ColList,
 ) (_ []exec.NodeColumnOrdinal, needProj bool) {
@@ -2556,6 +2581,7 @@ func (b *Builder) needProjection(
 
 // ensureColumns applies a projection as necessary to make the output match the
 // given list of columns; colNames is optional.
+// ensureColumns 根据需要应用投影以使输出匹配给定的列列表； colNames 是可选的。
 func (b *Builder) ensureColumns(
 	input execPlan, colList opt.ColList, provided opt.Ordering,
 ) (execPlan, error) {

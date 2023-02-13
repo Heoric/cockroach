@@ -16,18 +16,24 @@ import (
 )
 
 // VarName occurs inside scalar expressions.
+// VarName 出现在标量表达式中。
 //
 // Immediately after parsing, the following types can occur:
+// 解析后，会立即出现以下类型：
 //
 // - UnqualifiedStar: a naked star as argument to a function, e.g. count(*),
 //   or at the top level of a SELECT clause.
 //   See also uses of StarExpr() and StarSelectExpr() in the grammar.
+// - UnqualifiedStar: 一颗裸星作为函数的参数，例如 count(*)，或在 SELECT 子句的顶层。
+//	 另请参阅语法中 StarExpr() 和 StarSelectExpr() 的使用。
 //
 // - UnresolvedName: other names of the form `a.b....e` or `a.b...e.*`.
 //
 // Consumers of variable names do not like UnresolvedNames and instead
 // expect either AllColumnsSelector or ColumnItem. Use
 // NormalizeVarName() for this.
+// 变量名的消费者不喜欢 UnresolvedNames，而是期望 AllColumnsSelector 或 ColumnItem。
+// 为此使用 NormalizeVarName()。
 //
 // After a ColumnItem is available, it should be further resolved, for this
 // the Resolve() method should be used; see name_resolution.go.
@@ -37,6 +43,9 @@ type VarName interface {
 	// NormalizeVarName() guarantees to return a variable name
 	// that is not an UnresolvedName. This converts the UnresolvedName
 	// to an AllColumnsSelector or ColumnItem as necessary.
+
+	// NormalizeVarName 保证返回一个不是 UnresolvedName 的变量名。
+	// 这会根据需要将 UnresolvedName 转换为 AllColumnsSelector 或 ColumnItem。
 	NormalizeVarName() (VarName, error)
 }
 
@@ -93,6 +102,7 @@ func (n *UnresolvedName) NormalizeVarName() (VarName, error) {
 // (e.g. `table.*`).
 type AllColumnsSelector struct {
 	// TableName corresponds to the table prefix, before the star.
+	// TableName 对应表前缀，在星号之前。
 	TableName *UnresolvedObjectName
 }
 

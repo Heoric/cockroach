@@ -26,12 +26,16 @@ import (
 // approximate amount of memory allocated for row data.
 // Rows must be added using AddRow(); once the work is done
 // the Close() method must be called to release the allocated memory.
+// RowContainer 是 Datums 行的容器，它跟踪为行数据分配的大致内存量。
+// 必须使用 AddRow() 添加行； 一旦工作完成，必须调用 Close() 方法来释放分配的内存。
 //
 // TODO(knz): this does not currently track the amount of memory used
 // for the outer array of Datums references.
+// 这目前不跟踪用于外部基准面数组引用的内存量。
 type RowContainer struct {
 	// We should not copy this structure around; each copy would have a
 	// different memAcc (among other things like aliasing chunks).
+	// 我们不应该到处复制这个结构； 每个副本都会有不同的 memAcc（除其他事项外，例如别名块）。
 	_ util.NoCopy
 
 	numCols int
@@ -40,24 +44,30 @@ type RowContainer struct {
 	// single []Datum to reduce the overhead of the slice if we have few
 	// columns. Must be a power of 2 as determination of the chunk given a row
 	// index is performed using shifting.
+	// rowsPerChunk 是块中的行数； 如果我们的列很少，我们将多行打包在一个 []Datum 中以减少切片的开销。
+	// 必须是 2 的幂，因为给定行索引的块的确定是使用移位执行的。
 	rowsPerChunk      int
 	rowsPerChunkShift uint
 	chunks            [][]tree.Datum
-	firstChunk        [1][]tree.Datum // avoids allocation
+	firstChunk        [1][]tree.Datum // avoids allocation 避免分配
 	numRows           int
 
 	// chunkMemSize is the memory used by a chunk.
+	// chunkMemSize 是块使用的内存。
 	chunkMemSize int64
 	// fixedColsSize is the sum of widths of fixed-width columns in a
 	// single row.
+	// fixedColsSize 是单行中固定宽度列的宽度之和。
 	fixedColsSize int64
 	// varSizedColumns indicates for which columns the datum size
 	// is variable.
+	// varSizedColumns 指示数据大小可变的列。
 	varSizedColumns []int
 
 	// deletedRows is the number of rows that have been deleted from the front
 	// of the container. When this number reaches rowsPerChunk we delete that chunk
 	// and reset this back to zero.
+	// deletedRows 是从容器前面删除的行数。 当此数字达到 rowsPerChunk 时，我们删除该块并将其重置为零。
 	deletedRows int
 
 	// memAcc tracks the current memory consumption of this

@@ -20,18 +20,23 @@ import (
 
 // ExperimentalDistSQLPlanningMode controls if and when the opt-driven DistSQL
 // planning is used to create physical plans.
+// ExperimentalDistSQLPlanningMode 控制是否以及何时使用 opt-driven DistSQL 计划来创建物理计划。
 type ExperimentalDistSQLPlanningMode int64
 
 const (
 	// ExperimentalDistSQLPlanningOff means that we always use the old path of
 	// going from opt.Expr to planNodes and then to processor specs.
+	// ExperimentalDistSQLPlanningOff 意味着我们总是使用从 opt.Expr 到 planNodes 然后到处理器规格的旧路径。
 	ExperimentalDistSQLPlanningOff ExperimentalDistSQLPlanningMode = iota
 	// ExperimentalDistSQLPlanningOn means that we will attempt to use the new
 	// path for performing DistSQL planning in the optimizer, and if that
 	// doesn't succeed for some reason, we will fallback to the old path.
+	// ExperimentalDistSQLPlanningOn 意味着我们将尝试使用新路径在优化器中执行 DistSQL 规划，
+	// 如果由于某种原因不成功，我们将回退到旧路径。
 	ExperimentalDistSQLPlanningOn
 	// ExperimentalDistSQLPlanningAlways means that we will only use the new path,
 	// and if it fails for any reason, the query will fail as well.
+	// ExperimentalDistSQLPlanningAlways 意味着我们将只使用新路径，如果由于任何原因失败，查询也会失败。
 	ExperimentalDistSQLPlanningAlways
 )
 
@@ -74,13 +79,17 @@ type DistSQLExecMode int64
 
 const (
 	// DistSQLOff means that we never distribute queries.
+	// DistSQLOff 意味着我们从不分发查询。
 	DistSQLOff DistSQLExecMode = iota
 	// DistSQLAuto means that we automatically decide on a case-by-case basis if
 	// we distribute queries.
+	// DistSQLAuto 意味着如果我们分发查询，我们会根据具体情况自动决定。
 	DistSQLAuto
 	// DistSQLOn means that we distribute queries that are supported.
+	// DistSQLOn 表示我们分发支持的查询。
 	DistSQLOn
 	// DistSQLAlways means that we only distribute; unsupported queries fail.
+	// DistSQLAlways 表示我们只分发； 不受支持的查询失败。
 	DistSQLAlways
 )
 

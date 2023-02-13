@@ -91,6 +91,7 @@ type ScalarRank int
 
 // ScalarExpr is a scalar expression, which is an expression that returns a
 // primitive-typed value like boolean or string rather than rows and columns.
+// ScalarExpr 是一个标量表达式，它是一个返回原始类型值的表达式，例如布尔值或字符串，而不是行和列。
 type ScalarExpr interface {
 	Expr
 

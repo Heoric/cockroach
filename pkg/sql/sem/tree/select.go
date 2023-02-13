@@ -161,6 +161,8 @@ type SelectExpr struct {
 // the top level of the expression into a VarName. This is meant
 // to catch stars so that sql.checkRenderStar() can see it prior to
 // other expression transformations.
+// NormalizeTopLevelVarName 抢先将表达式顶层的任何 UnresolvedName 扩展为 VarName。
+// 这是为了捕捉星星，以便 sql.checkRenderStar() 可以在其他表达式转换之前看到它。
 func (node *SelectExpr) NormalizeTopLevelVarName() error {
 	if vBase, ok := node.Expr.(VarName); ok {
 		v, err := vBase.NormalizeVarName()

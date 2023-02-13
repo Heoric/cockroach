@@ -66,18 +66,25 @@ import (
 // state. Returns an Event to be passed to the state machine, or nil if no
 // transition is needed. If nil is returned, then the cursor is supposed to
 // advance to the next statement.
+// execStmt 根据当前状态调度执行一条语句。 返回要传递给状态机的事件，如果不需要转换则返回 nil。
+// 如果返回 nil，则游标应该前进到下一条语句。
 //
 // If an error is returned, the session is supposed to be considered done. Query
 // execution errors are not returned explicitly and they're also not
 // communicated to the client. Instead they're incorporated in the returned
 // event (the returned payload will implement payloadWithError). It is the
 // caller's responsibility to deliver execution errors to the client.
+// 如果返回错误，则认为会话已完成。 查询执行错误不会显式返回，也不会传达给客户端。
+// 相反，它们被合并到返回的事件中（返回的有效负载将实现 payloadWithError）。
+// 调用者有责任将执行错误传递给客户端。
 //
 // Args:
 // stmt: The statement to execute.
 // res: Used to produce query results.
+// 用于生成查询结果。
 // pinfo: The values to use for the statement's placeholders. If nil is passed,
 // 	 then the statement cannot have any placeholder.
+// 用于语句占位符的值。 如果传递了 nil，则该语句不能有任何占位符。
 func (ex *connExecutor) execStmt(
 	ctx context.Context,
 	parserStmt parser.Statement,
@@ -93,20 +100,24 @@ func (ex *connExecutor) execStmt(
 	}
 
 	// Stop the session idle timeout when a new statement is executed.
+	// 执行新语句时停止会话空闲超时。
 	ex.mu.IdleInSessionTimeout.Stop()
 	ex.mu.IdleInTransactionSessionTimeout.Stop()
 
 	// Run observer statements in a separate code path; their execution does not
 	// depend on the current transaction state.
+	// 在单独的代码路径中运行观察者语句； 它们的执行不依赖于当前的事务状态。
 	if _, ok := ast.(tree.ObserverStatement); ok {
 		ex.statsCollector.Reset(ex.applicationStats, ex.phaseTimes)
 		err := ex.runObserverStatement(ctx, ast, res)
 		// Note that regardless of res.Err(), these observer statements don't
 		// generate error events; transactions are always allowed to continue.
+		// 请注意，无论 res.Err() 是什么，这些观察者语句都不会生成错误事件； 交易总是允许继续进行。
 		return nil, nil, err
 	}
 
 	// Dispatch the statement for execution based on the current state.
+	// 根据当前状态调度要执行的语句。
 	var ev fsm.Event
 	var payload fsm.EventPayload
 	var err error
@@ -116,6 +127,8 @@ func (ex *connExecutor) execStmt(
 		// Note: when not using explicit transactions, we go through this transition
 		// for every statement. It is important to minimize the amount of work and
 		// allocations performed up to this point.
+		// 注意：当不使用显式事务时，我们会为每个语句执行此转换。
+		// 重要的是尽量减少到目前为止执行的工作量和分配量。
 		ev, payload = ex.execStmtInNoTxnState(ctx, ast)
 
 	case stateOpen:
@@ -171,6 +184,7 @@ func (ex *connExecutor) execStmt(
 			case *tree.CommitTransaction, *tree.RollbackTransaction:
 				// Do nothing, the transaction is completed, we do not want to start
 				// an idle timer.
+				// 什么都不做，事务完成，我们不想启动空闲计时器。
 			default:
 				ex.mu.IdleInTransactionSessionTimeout = timeout{time.AfterFunc(
 					ex.sessionData().IdleInTransactionSessionTimeout,
@@ -184,6 +198,7 @@ func (ex *connExecutor) execStmt(
 		case stateOpen:
 			// Only start timeout if the statement is executed in an
 			// explicit transaction.
+			// 仅当语句在显式事务中执行时才开始超时。
 			if !ex.implicitTxn() {
 				startIdleInTransactionSessionTimeout()
 			}
@@ -199,6 +214,7 @@ func (ex *connExecutor) recordFailure() {
 
 // execPortal executes a prepared statement. It is a "wrapper" around execStmt
 // method that is performing additional work to track portal's state.
+// execPortal 执行准备好的语句。 它是 execStmt 方法的“包装器”，执行额外的工作来跟踪门户的状态。
 func (ex *connExecutor) execPortal(
 	ctx context.Context,
 	portal PreparedPortal,
@@ -222,9 +238,18 @@ func (ex *connExecutor) execPortal(
 		// which will emit CommandComplete messages and alike (in a sense,
 		// by not calling execStmt we "execute" the portal in such a way
 		// that it returns 0 rows).
+		// 我们即将在打开状态下执行语句，这可能会触发对执行引擎的调度。
+		// 然而，我们可能正在尝试执行一个已经耗尽的门户 - 在这种情况下，我们应该不返回任何行，
+		// 但执行引擎并不知道这一点，并且会像第一次运行它一样运行该语句 时间。
+		// 为了防止这种行为，我们检查入口是否已经耗尽，只有在没有耗尽时才执行语句。
+		// 如果它已经耗尽，那么我们不会分派执行查询，但 connExecutor 仍将执行必要的状态转换，
+		// 这将发出 CommandComplete 消息等（在某种意义上，通过不调用 execStmt，
+		// 我们以这种方式“执行”门户 它返回 0 行）。
 		// Note that here we deviate from Postgres which returns an error
 		// when attempting to execute an exhausted portal which has a
 		// StatementReturnType() different from "Rows".
+		// 请注意，这里我们偏离了 Postgres，它在尝试执行一个耗尽的门户时返回错误，
+		// 该门户的 StatementReturnType() 不同于“Rows”。
 		if portal.exhausted {
 			return nil, nil, nil
 		}
@@ -233,11 +258,15 @@ func (ex *connExecutor) execPortal(
 		// (see pgwire.limitedCommandResult for details), so when
 		// execStmt returns, we know for sure that the portal has been
 		// executed to completion, thus, it is exhausted.
+		// Portal 暂停是通过一个“side”状态机支持的（详见 pgwire.limitedCommandResult），
+		// 所以当 execStmt 返回时，我们确定 portal 已经执行完成，因此，它已经耗尽。
 		// Note that the portal is considered exhausted regardless of
 		// the fact whether an error occurred or not - if it did, we
 		// still don't want to re-execute the portal from scratch.
 		// The current statement may have just closed and deleted the portal,
 		// so only exhaust it if it still exists.
+		// 请注意，无论是否发生错误，门户都被视为耗尽 - 如果错误发生，我们仍然不想从头开始重新执行门户。
+		// 当前语句可能刚刚关闭并删除了门户，所以只有在它仍然存在的情况下才耗尽它。
 		if _, ok := ex.extraTxnState.prepStmtsNamespace.portals[portalName]; ok {
 			ex.exhaustPortal(portalName)
 		}
@@ -250,17 +279,23 @@ func (ex *connExecutor) execPortal(
 
 // execStmtInOpenState executes one statement in the context of the session's
 // current transaction.
+// execStmtInOpenState 在会话当前事务的上下文中执行一条语句。
 // It handles statements that affect the transaction state (BEGIN, COMMIT)
 // directly and delegates everything else to the execution engines.
 // Results and query execution errors are written to res.
+// 它直接处理影响事务状态（BEGIN、COMMIT）的语句，并将其他一切委托给执行引擎。
+// 结果和查询执行错误被写入 res.
 //
 // This method also handles "auto commit" - committing of implicit transactions.
+// 此方法还处理“自动提交”——隐式事务的提交。
 //
 // If an error is returned, the connection is supposed to be consider done.
 // Query execution errors are not returned explicitly; they're incorporated in
 // the returned Event.
+// 如果返回错误，则认为连接已完成。 不会显式返回查询执行错误； 它们被合并到返回的事件中。
 //
 // The returned event can be nil if no state transition is required.
+// 如果不需要状态转换，则返回的事件可以为 nil。
 func (ex *connExecutor) execStmtInOpenState(
 	ctx context.Context,
 	parserStmt parser.Statement,
@@ -284,6 +319,7 @@ func (ex *connExecutor) execStmtInOpenState(
 	var stmt Statement
 	queryID := ex.generateID()
 	// Update the deadline on the transaction based on the collections.
+	// 根据集合更新事物的截止日期。
 	err := ex.extraTxnState.descCollection.MaybeUpdateDeadline(ctx, ex.state.mu.txn)
 	if err != nil {
 		return makeErrEvent(err)
@@ -327,6 +363,7 @@ func (ex *connExecutor) execStmtInOpenState(
 	// Make sure that we always unregister the query. It also deals with
 	// overwriting res.Error to a more user-friendly message in case of query
 	// cancellation.
+	// 确保我们始终注销查询。 它还处理在查询取消的情况下将 res.Error 覆盖为更用户友好的消息。
 	defer func(ctx context.Context, res RestrictedCommandResult) {
 		if timeoutTicker != nil {
 			if !timeoutTicker.Stop() {
@@ -346,6 +383,9 @@ func (ex *connExecutor) execStmtInOpenState(
 		// sorts of errors on the result. Rather than trying to impose discipline
 		// in that jungle, we just overwrite them all here with an error that's
 		// nicer to look at for the client.
+		// 检测上下文取消并覆盖之前可能在结果上设置的任何错误。
+		// 这个想法是，一旦查询的上下文被取消，各种参与者都可以检测到取消并在结果上设置各种错误。
+		// 与其试图在那个丛林中强加纪律，我们只是在这里用一个更好看的错误来覆盖它们。
 		if res != nil && ctx.Err() != nil && res.Err() != nil {
 			// Even in the cases where the error is a retryable error, we want to
 			// intercept the event and payload returned here to ensure that the query
@@ -367,6 +407,12 @@ func (ex *connExecutor) execStmtInOpenState(
 		// not have been canceled (eg. We never even start executing a query
 		// because the timeout has already expired), and therefore this check needs
 		// to happen outside the canceled query check above.
+		// 如果查询超时，我们在这里拦截错误、负载和事件，原因与我们拦截上面取消的查询的原因相同。
+		// 在我们检查了已取消的查询后，需要使用 QueryTimedOut 错误覆盖查询，
+		// 因为某些查询可能会因超时而被取消，在这种情况下，
+		// 返回给客户端的适当错误是指示超时的错误，而不是更多 一般查询取消错误。
+		// 重要的是要注意超时查询可能没有被取消（例如，我们甚至从未开始执行查询，因为超时已经过期），
+		// 因此此检查需要在上面的已取消查询检查之外进行。
 		if queryTimedOut {
 			// A timed out query should never produce retryable errors/events/payloads
 			// so we intercept and overwrite them all here.
@@ -427,6 +473,8 @@ func (ex *connExecutor) execStmtInOpenState(
 	// Special top-level handling for EXECUTE. This must happen after the handling
 	// for EXPLAIN ANALYZE (in order to support EXPLAIN ANALYZE EXECUTE) but
 	// before setting up the instrumentation helper.
+	// EXECUTE 的特殊顶级处理。 这必须发生在 EXPLAIN ANALYZE 处理之后
+	// （为了支持 EXPLAIN ANALYZE EXECUTE）但在设置检测助手之前。
 	if e, ok := ast.(*tree.Execute); ok {
 		// Replace the `EXECUTE foo` statement with the prepared statement, and
 		// continue execution.
@@ -488,6 +536,7 @@ func (ex *connExecutor) execStmtInOpenState(
 		timerDuration :=
 			ex.sessionData().StmtTimeout - timeutil.Since(ex.phaseTimes.GetSessionPhaseTime(sessionphase.SessionQueryReceived))
 		// There's no need to proceed with execution if the timer has already expired.
+		// 如果计时器已经过期，则无需继续执行。
 		if timerDuration < 0 {
 			queryTimedOut = true
 			return makeErrEvent(sqlerrors.QueryTimeoutError)
@@ -603,6 +652,7 @@ func (ex *connExecutor) execStmtInOpenState(
 
 	// For regular statements (the ones that get to this point), we
 	// don't return any event unless an error happens.
+	// 对于常规语句（达到这一点的语句），除非发生错误，否则我们不会返回任何事件。
 
 	if err := ex.handleAOST(ctx, ast); err != nil {
 		return makeErrEvent(err)
@@ -615,34 +665,48 @@ func (ex *connExecutor) execStmtInOpenState(
 	// mutation does not see its own writes. If a query contains
 	// multiple mutations using CTEs (WITH) or a read part following a
 	// mutation, all still operate on the same read snapshot.
+	// 首要任务是确保正确的排序语义。
+	// 根据 PostgreSQL 的方言规范，语句的“读取”部分始终按照语句开始运行时拍摄的数据库快照查看数据。
+	// 特别是一个突变看不到它自己的写入。
+	// 如果查询包含使用 CTE (WITH) 的多个突变或突变后的读取部分，则所有查询仍对相同的读取快照进行操作。
 	//
 	// (To communicate data between CTEs and a main query, the result
 	// set / RETURNING can be used instead. However this is not relevant
 	// here.)
+	//（要在 CTE 和主查询之间传递数据，可以使用结果集 / RETURNING 代替。但这与此处无关。）
 
 	// We first ensure stepping mode is enabled.
+	// 我们首先确保步进模式已启用。
 	//
 	// This ought to be done just once when a txn gets initialized;
 	// unfortunately, there are too many places where the txn object
 	// is re-configured, re-set etc without using NewTxnWithSteppingEnabled().
+	// 这应该只在 txn 初始化时完成一次；
+	// 不幸的是，有太多地方在不使用 NewTxnWithSteppingEnabled() 的情况下重新配置、
+	// 重新设置 txn 对象等。
 	//
 	// Manually hunting them down and calling ConfigureStepping() each
 	// time would be error prone (and increase the chance that a future
 	// change would forget to add the call).
+	// 每次手动寻找它们并调用 ConfigureStepping() 很容易出错（并增加未来更改忘记添加调用的机会）。
 	//
 	// TODO(andrei): really the code should be rearchitected to ensure
 	// that all uses of SQL execution initialize the client.Txn using a
 	// single/common function. That would be where the stepping mode
 	// gets enabled once for all SQL statements executed "underneath".
+	// 实际上，应该重新设计代码以确保所有 SQL 执行的使用都使用单个/通用函数初始化 client.Txn。
+	// 这将是为所有“在下面”执行的 SQL 语句启用一次步进模式的地方。
 	prevSteppingMode := ex.state.mu.txn.ConfigureStepping(ctx, kv.SteppingEnabled)
 	defer func() { _ = ex.state.mu.txn.ConfigureStepping(ctx, prevSteppingMode) }()
 
 	// Then we create a sequencing point.
+	// 然后我们创建一个排序点。
 	//
 	// This is not the only place where a sequencing point is
 	// placed. There are also sequencing point after every stage of
 	// constraint checks and cascading actions at the _end_ of a
 	// statement's execution.
+	// 这不是唯一放置排序点的地方。 在语句执行的_end_ 约束检查和级联操作的每个阶段之后也有排序点。
 	//
 	// TODO(knz): At the time of this writing CockroachDB performs
 	// cascading actions and the corresponding FK existence checks
@@ -656,6 +720,11 @@ func (ex *connExecutor) execStmtInOpenState(
 	// well as in-between very stage of cascading actions.
 	// This TODO can be removed when the cascading code is reorganized
 	// accordingly and the missing call to Step() is introduced.
+	// TODO(knz)：在撰写本文时，CockroachDB 执行级联操作，相应的 FK 存在性检查与突变交错。
+	// 这是不正确的； 正确的行为，如问题 https://github.com/cockroachdb/cockroach/issues/33475
+	// 中所述，是在不早于当前语句（包括其所有 CTE）的所有“主要影响”具有之后执行级联操作 完全的。
+	// 在主执行结束和级联动作开始之间以及级联动作的中间阶段应该有一个序列点。
+	// 当相应地重组级联代码并引入对 Step() 的缺失调用时，可以删除此 TODO。
 	if err := ex.state.mu.txn.Step(ctx); err != nil {
 		return makeErrEvent(err)
 	}
@@ -1008,11 +1077,14 @@ func (ex *connExecutor) rollbackSQLTransaction(
 
 // dispatchToExecutionEngine executes the statement, writes the result to res
 // and returns an event for the connection's state machine.
+// dispatchToExecutionEngine 执行语句，将结果写入 res 并返回连接状态机的事件。
 //
 // If an error is returned, the connection needs to stop processing queries.
 // Query execution errors are written to res; they are not returned; it is
 // expected that the caller will inspect res and react to query errors by
 // producing an appropriate state machine event.
+// 如果返回错误，连接需要停止处理查询。 查询执行错误写入res； 他们不退还；
+// 预计调用者将检查 res 并通过生成适当的状态机事件来对查询错误做出反应。
 func (ex *connExecutor) dispatchToExecutionEngine(
 	ctx context.Context, planner *planner, res RestrictedCommandResult,
 ) error {
@@ -1024,6 +1096,8 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 	// before the deferred maybeLogStatement.
 	// We must check prior to execution in the case the txn is aborted due to
 	// an error. HasAdminRole can only be checked in a valid txn.
+	// 如果启用了 adminAuditLogging，我们希望在延迟的 maybeLogStatement 之前检查 HasAdminRole。
+	// 我们必须在执行之前检查交易是否因错误而中止。 HasAdminRole 只能在有效的 txn 中检查。
 	if adminAuditLog := adminAuditLogEnabled.Get(
 		&ex.planner.execCfg.Settings.SV,
 	); adminAuditLog {
@@ -1038,9 +1112,11 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 	}
 	// Prepare the plan. Note, the error is processed below. Everything
 	// between here and there needs to happen even if there's an error.
+	// 准备计划。 注意，错误处理如下。 即使出现错误，这里和那里之间的一切都需要发生。
 	err := ex.makeExecPlan(ctx, planner)
 	// We'll be closing the plan manually below after execution; this
 	// defer is a catch-all in case some other return path is taken.
+	// 我们将在下面手动关闭执行后的计划； 如果采用其他返回路径，则此延迟是一个包罗万象的方法。
 	defer planner.curPlan.close(ctx)
 
 	if planner.autoCommit {
@@ -1049,6 +1125,7 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 
 	// Certain statements want their results to go to the client
 	// directly. Configure this here.
+	// 某些语句希望它们的结果直接发送给客户端。 在这里配置。
 	if planner.curPlan.avoidBuffering || ex.sessionData().AvoidBuffering {
 		res.DisableBuffering()
 	}
@@ -1150,6 +1227,7 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 	if res.Err() == nil {
 		// numTxnRetryErrors is the number of times an error will be injected if
 		// the transaction is retried using SAVEPOINTs.
+		// numTxnRetryErrors 是使用 SAVEPOINT 重试事务时将注入错误的次数。
 		const numTxnRetryErrors = 3
 		isSetOrShow := stmt.AST.StatementTag() == "SET" || stmt.AST.StatementTag() == "SHOW"
 		if ex.sessionData().InjectRetryErrorsEnabled && !isSetOrShow &&
@@ -1239,6 +1317,7 @@ func (e *txnRowsReadLimitErr) SafeFormatError(p errors.Printer) (next error) {
 }
 
 // handleTxnRowsGuardrails handles either "written" or "read" rows guardrails.
+// handleTxnRowsGuardrails 处理“写入”或“读取”行护栏。
 func (ex *connExecutor) handleTxnRowsGuardrails(
 	ctx context.Context,
 	numRows, logLimit, errLimit int64,
@@ -1316,11 +1395,15 @@ func (ex *connExecutor) handleTxnRowsGuardrails(
 // reached the limits on the number of rows written/read and logs the
 // corresponding event or returns an error. It should be called after executing
 // a single statement.
+// handleTxnRowsWrittenReadLimits 检查当前事务是否已达到写/读行数限制并记录相应事件或返回错误。
+// 它应该在执行单个语句后调用。
 func (ex *connExecutor) handleTxnRowsWrittenReadLimits(ctx context.Context) error {
 	// Note that in many cases, the internal executor doesn't have the
 	// sessionData properly set (i.e. the default values are used), so we'll
 	// never log anything then. This seems acceptable since the focus of these
 	// guardrails is on the externally initiated queries.
+	// 请注意，在许多情况下，内部执行程序没有正确设置 sessionData（即使用默认值），
+	// 因此我们永远不会记录任何内容。 这似乎是可以接受的，因为这些护栏的重点是外部发起的查询。
 	sd := ex.sessionData()
 	writtenErr := ex.handleTxnRowsGuardrails(
 		ctx,
@@ -1347,6 +1430,7 @@ func (ex *connExecutor) handleTxnRowsWrittenReadLimits(ctx context.Context) erro
 
 // makeExecPlan creates an execution plan and populates planner.curPlan using
 // the cost-based optimizer.
+// makeExecPlan 创建一个执行计划并使用基于成本的优化器填充 planner.curPlan。
 func (ex *connExecutor) makeExecPlan(ctx context.Context, planner *planner) error {
 	if err := planner.makeOptimizerPlan(ctx); err != nil {
 		log.VEventf(ctx, 1, "optimizer plan failed: %v", err)
@@ -1397,8 +1481,10 @@ type topLevelQueryStats struct {
 
 // execWithDistSQLEngine converts a plan to a distributed SQL physical plan and
 // runs it.
+// execWithDistSQLEngine 将计划转换为分布式 SQL 物理计划并运行它。
 // If an error is returned, the connection needs to stop processing queries.
 // Query execution errors are written to res; they are not returned.
+// 如果返回错误，连接需要停止处理查询。 查询执行错误写入res； 他们没有退回。
 func (ex *connExecutor) execWithDistSQLEngine(
 	ctx context.Context,
 	planner *planner,
@@ -1441,6 +1527,7 @@ func (ex *connExecutor) execWithDistSQLEngine(
 		len(planner.curPlan.checkPlans) != 0 {
 		// The factory reuses the same object because the contexts are not used
 		// concurrently.
+		// 工厂重用同一个对象，因为上下文没有同时使用。
 		var factoryEvalCtx extendedEvalContext
 		ex.initEvalCtx(ctx, &factoryEvalCtx, planner)
 		evalCtxFactory = func() *extendedEvalContext {
@@ -1449,6 +1536,7 @@ func (ex *connExecutor) execWithDistSQLEngine(
 			factoryEvalCtx.Annotations = &planner.semaCtx.Annotations
 			// Query diagnostics can change the Context; make sure we are using the
 			// same one.
+			// 查询诊断可以改变上下文； 确保我们使用的是同一个。
 			// TODO(radu): consider removing this if/when #46164 is addressed.
 			factoryEvalCtx.Context = evalCtx.Context
 			return &factoryEvalCtx
@@ -1459,6 +1547,8 @@ func (ex *connExecutor) execWithDistSQLEngine(
 		// Create a separate memory account for the results of the subqueries.
 		// Note that we intentionally defer the closure of the account until we
 		// return from this method (after the main query is executed).
+		// 为子查询的结果创建一个单独的内存帐户。 请注意，我们有意推迟关闭帐户，
+		// 直到我们从该方法返回（在执行主查询之后）。
 		subqueryResultMemAcc := planner.EvalContext().Mon.MakeBoundAccount()
 		defer subqueryResultMemAcc.Close(ctx)
 		if !ex.server.cfg.DistSQLPlanner.PlanAndRunSubqueries(
@@ -1470,11 +1560,13 @@ func (ex *connExecutor) execWithDistSQLEngine(
 	recv.discardRows = planner.instrumentation.ShouldDiscardRows()
 	// We pass in whether or not we wanted to distribute this plan, which tells
 	// the planner whether or not to plan remote table readers.
+	// 我们传入是否要分发这个计划，它告诉 planner是否计划远程 table reader。
 	cleanup := ex.server.cfg.DistSQLPlanner.PlanAndRun(
 		ctx, evalCtx, planCtx, planner.txn, planner.curPlan.main, recv,
 	)
 	// Note that we're not cleaning up right away because postqueries might
 	// need to have access to the main query tree.
+	// 请注意，我们不会立即清理，因为 postqueries 可能需要访问主查询树。
 	defer cleanup()
 	if recv.commErr != nil || res.Err() != nil {
 		return *recv.stats, recv.commErr
@@ -1492,6 +1584,9 @@ func (ex *connExecutor) execWithDistSQLEngine(
 // values of the BeginTransaction statement's Modes, along with the session's
 // default transaction settings. If no BeginTransaction statement is provided
 // then the session's defaults are consulted alone.
+// beginTransactionTimestampsAndReadMode 根据 BeginTransaction
+// 语句的模式值以及会话的默认事务设置计算用于关联事务状态的时间戳和 ReadWriteMode。
+// 如果没有提供 BeginTransaction 语句，那么将单独查询会话的默认值。
 //
 // Note that this method may reset the connExecutor's planner in order to
 // compute the timestamp for the AsOf clause if it exists. The timestamps
@@ -1500,6 +1595,11 @@ func (ex *connExecutor) execWithDistSQLEngine(
 // historicalTimestamp populated with a non-nil value only if the
 // BeginTransaction statement has a non-nil AsOf clause expression. A
 // non-nil historicalTimestamp implies a ReadOnly rwMode.
+// 请注意，此方法可能会重置 connExecutor 的计划程序，以便计算 AsOf 子句的时间戳（如果存在）。
+// 时间戳对应传递给makeEventTxnStartPayload的时间戳；
+// txnSQLTimestamp 传播成为 TxnTimestamp 而 historicalTimestamp 仅当
+// BeginTransaction 语句具有非 nil AsOf 子句表达式时才填充非 nil 值。
+// 非零 historicalTimestamp 意味着 ReadOnly rwMode。
 func (ex *connExecutor) beginTransactionTimestampsAndReadMode(
 	ctx context.Context, s *tree.BeginTransaction,
 ) (
@@ -1544,11 +1644,16 @@ var eventStartExplicitTxn fsm.Event = eventTxnStart{ImplicitTxn: fsm.False}
 // For anything but BEGIN, this method doesn't actually execute the statement;
 // it just returns an Event that will generate a transaction. The statement will
 // then be executed again, but this time in the Open state (implicit txn).
+// execStmtInNoTxnState 在范围内没有事务时“执行”语句。
+// 除了 BEGIN，这个方法实际上并不执行语句； 它只是返回一个将生成交易的事件。
+// 然后语句将再次执行，但这次处于 Open 状态（隐式 txn）。
 //
 // Note that eventTxnStart, which is generally returned by this method, causes
 // the state to change and previous results to be flushed, but for implicit txns
 // the cursor is not advanced. This means that the statement will run again in
 // stateOpen, at each point its results will also be flushed.
+// 请注意，此方法通常返回的 eventTxnStart 会导致状态更改并刷新先前的结果，
+// 但对于隐式 txns，游标不会前进。 这意味着语句将在 stateOpen 中再次运行，在每个点它的结果也将被刷新。
 func (ex *connExecutor) execStmtInNoTxnState(
 	ctx context.Context, ast tree.Statement,
 ) (_ fsm.Event, payload fsm.EventPayload) {
@@ -1581,6 +1686,8 @@ func (ex *connExecutor) execStmtInNoTxnState(
 		// historical timestamp even though the statement itself might contain
 		// an AOST clause. In these cases the clause is evaluated and applied
 		// execStmtInOpenState.
+		// 注意：隐式事务是使用会话的默认历史时间戳创建的，即使语句本身可能包含 AOST 子句。
+		// 在这些情况下，子句被评估并应用 execStmtInOpenState。
 		noBeginStmt := (*tree.BeginTransaction)(nil)
 		mode, sqlTs, historicalTs, err := ex.beginTransactionTimestampsAndReadMode(ctx, noBeginStmt)
 		if err != nil {
@@ -2266,6 +2373,8 @@ func (ex *connExecutor) recordTransactionFinish(
 // logTraceAboveThreshold logs a span's recording if the duration is above a
 // given threshold. It is used when txn or stmt threshold tracing is enabled.
 // This function assumes that sp is non-nil and threshold tracing was enabled.
+// logTraceAboveThreshold 在持续时间超过给定阈值时记录 span 的记录。
+// 它在启用 txn 或 stmt 阈值跟踪时使用。 此函数假定 sp 非零并且启用了阈值跟踪。
 func logTraceAboveThreshold(
 	ctx context.Context, r tracing.Recording, opName string, threshold, elapsed time.Duration,
 ) {

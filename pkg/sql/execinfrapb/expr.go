@@ -100,6 +100,7 @@ func processExpression(
 
 // ExprHelper implements the common logic around evaluating an expression that
 // depends on a set of values.
+// ExprHelper 实现围绕评估依赖于一组值的表达式的通用逻辑。
 type ExprHelper struct {
 	_ util.NoCopy
 

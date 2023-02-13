@@ -1409,12 +1409,16 @@ func (dsp *DistSQLPlanner) planAndRunSubquery(
 
 // PlanAndRun generates a physical plan from a planNode tree and executes it. It
 // assumes that the tree is supported (see CheckSupport).
+// PlanAndRun 从 planNode 树生成一个物理计划并执行它。 它假定支持树（请参阅 CheckSupport）。
 //
 // All errors encountered are reported to the DistSQLReceiver's resultWriter.
 // Additionally, if the error is a "communication error" (an error encountered
 // while using that resultWriter), the error is also stored in
 // DistSQLReceiver.commErr. That can be tested to see if a client session needs
 // to be closed.
+// 遇到的所有错误都会报告给 DistSQLReceiver 的 resultWriter。
+// 此外，如果错误是“通信错误”（使用该 resultWriter 时遇到的错误），
+// 该错误也会存储在 DistSQLReceiver.commErr 中。 可以对其进行测试以查看是否需要关闭客户端会话。
 //
 // It returns a non-nil (although it can be a noop when an error is
 // encountered) cleanup function that must be called once the planTop AST is no
@@ -1425,6 +1429,12 @@ func (dsp *DistSQLPlanner) planAndRunSubquery(
 // uses the same monitor. That's why we end up in a situation that in order to
 // clean up the flow, we need to close the AST first, but we can only do that
 // after PlanAndRun returns.
+// 它返回一个非 nil（尽管遇到错误时它可能是一个 noop）清理函数，
+// 一旦不再需要 planTop AST 并且可以将其关闭，就必须调用该清理函数。
+// 请注意，此函数还清理了流，这是不幸的，但是由计划和执行之间共享内存监视器引起的
+// - 清理流想要关闭监视器，但它不能这样做，因为 AST 需要更长时间并且仍然 使用相同的显示器。
+// 这就是为什么我们最终会遇到这样一种情况，即为了清理流程，
+// 我们需要先关闭 AST，但我们只能在 PlanAndRun 返回后才能这样做。
 func (dsp *DistSQLPlanner) PlanAndRun(
 	ctx context.Context,
 	evalCtx *extendedEvalContext,

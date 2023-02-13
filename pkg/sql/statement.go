@@ -32,9 +32,13 @@ type Statement struct {
 	// been invalidated by schema changes, session data changes, permission
 	// changes, or other changes to the context in which the original plan was
 	// prepared.
+	// Prepared 在 PREPARE 阶段以及在先前准备好的语句的 EXECUTE 期间是非零的。
+	// Prepared 语句可以在任一阶段进行修改； PREPARE 阶段设置其初始状态，EXECUTE 阶段可以重新准备它。
+	// 当原始计划因模式更改、会话数据更改、权限更改或准备原始计划的上下文的其他更改而失效时，就会发生这种情况。
 	//
 	// Given that the PreparedStatement can be modified during planning, it is
 	// not safe for use on multiple threads.
+	// 由于PreparedStatement在规划时可以修改，所以在多线程上使用是不安全的。
 	Prepared *PreparedStatement
 }
 

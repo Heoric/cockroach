@@ -21,6 +21,7 @@ import (
 
 // filtererProcessor is a processor that filters input rows according to a
 // boolean expression.
+// filtererProcessor 是一个根据布尔表达式过滤输入行的处理器。
 type filtererProcessor struct {
 	execinfra.ProcessorBase
 	input  execinfra.RowSource

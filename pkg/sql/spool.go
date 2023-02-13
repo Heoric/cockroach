@@ -23,6 +23,8 @@ import (
 // child node is guaranteed to run to completion.
 // If hardLimit is set, only that number of rows is collected, but
 // the child node is still run to completion.
+// spoolNode 确保子 planNode 在开始阶段执行到完成。 收集结果（如果有的话）。
+// 子节点保证运行完成。 如果设置了 hardLimit，则只收集该数量的行，但子节点仍会运行到完成。
 type spoolNode struct {
 	source    planNode
 	rows      *rowcontainer.RowContainer
