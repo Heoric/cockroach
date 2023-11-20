@@ -72,6 +72,8 @@ func maxConcurrentCatchupScans(sv *settings.Values) int {
 // RangeFeed divides a RangeFeed request on range boundaries and establishes a
 // RangeFeed to each of the individual ranges. It streams back results on the
 // provided channel.
+// RangeFeed 在范围边界上划分 RangeFeed 请求，并为每个单独的范围建立一个 RangeFeed。
+// 它在提供的通道上流回结果。
 //
 // Note that the timestamps in RangeFeedCheckpoint events that are streamed back
 // may be lower than the timestamp given here.

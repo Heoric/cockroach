@@ -484,6 +484,7 @@ func (b *Builder) buildScan(
 
 	// We collect VirtualComputed columns separately; these cannot be scanned,
 	// they can only be projected afterward.
+	// 我们单独收集 VirtualComputed 列； 这些无法扫描，只能随后投影。
 	var scanColIDs, virtualColIDs opt.ColSet
 	outScope.cols = make([]scopeColumn, len(ordinals))
 	for i, ord := range ordinals {
@@ -1251,6 +1252,9 @@ func (b *Builder) exprIsLateral(t tree.TableExpr) bool {
 // semantics of LATERAL require that the join tree is built left-deep (from
 // left-to-right) rather than right-deep (from right-to-left) which we do
 // typically for perf backwards-compatibility.
+// buildFromWithLateral 在包含 LATERAL 表的情况下构建 FROM 子句。
+// 这与 buildFromTablesRightDeep 不同，因为 LATERAL 的语义要求连接树是左深
+//（从左到右）构建的，而不是右深（从右到左）构建的，我们通常这样做是为了性能向后兼容。
 //
 //   SELECT * FROM a, b, c
 //

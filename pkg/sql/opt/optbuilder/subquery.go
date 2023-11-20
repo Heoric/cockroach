@@ -42,6 +42,7 @@ type subquery struct {
 	// ordering is the ordering requested by the subquery.
 	// It is only consulted in certain cases, however (such as the
 	// ArrayFlatten operation).
+	// 但是，仅在某些情况下才会参考它（例如 ArrayFlatten 操作）。
 	ordering opt.Ordering
 
 	// wrapInTuple is true if the subquery return type should be wrapped in a

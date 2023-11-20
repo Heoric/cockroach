@@ -56,6 +56,9 @@ func (op Operator) SyntaxTag() string {
 // inspect the tree. Each node in the tree has an enumerated operator type, zero
 // or more children, and an optional private value. The entire tree can be
 // easily visited using a pattern like this:
+// Expr 是表达式树中的一个节点。 它提供了遍历和检查树的方法。
+// 树中的每个节点都有一个枚举运算符类型、零个或多个子节点以及一个可选的私有值。
+// 可以使用如下模式轻松访问整个树：
 //
 //   var visit func(e Expr)
 //   visit := func(e Expr) {
@@ -78,6 +81,9 @@ type Expr interface {
 	// type and format of the data, which will differ from operator to operator.
 	// For example, an operator may choose to return one of its fields, or perhaps
 	// a pointer to itself, or nil if there is nothing useful to return.
+	// Private 返回特定于操作员的数据。 调用者应该知道数据的类型和格式，这因操作员而异。
+	// 例如，运算符可以选择返回其字段之一，或者可能返回指向自身的指针，
+	// 或者如果没有任何有用的内容可返回，则返回 nil。
 	Private() interface{}
 
 	// String returns a human-readable string representation for the expression

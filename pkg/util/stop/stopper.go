@@ -116,13 +116,18 @@ func (f CloserFn) Close() {
 //   (that is, its Run* family of methods starts returning ErrUnavailable),
 //   closes the channel returned by ShouldQuiesce, and blocks until
 //   until no more tasks are tracked, then
+//   它调用 Quiesce，这会导致 Stopper 拒绝新工作（即，其 Run* 系列方法开始返回 ErrUnavailable），
+//   关闭 ShouldQuiesce 返回的通道，并阻塞，直到不再跟踪任何任务，然后
 // - it runs all of the methods supplied to AddCloser, then
-// - closes the IsStopped channel.
+//   it runs all of the methods supplied to AddCloser, then
+// - closes the IsStopped channel.   关闭 IsStopped 通道。
 //
 // When ErrUnavailable is returned from a task, the caller needs
 // to handle it appropriately by terminating any work that it had
 // hoped to defer to the task (which is guaranteed to never have been
 // invoked). A simple example of this can be seen in the below snippet:
+// 当从任务返回 ErrUnavailable 时，调用者需要通过终止它希望推迟到该任务的任何工作（保证永远不会被调用）
+// 来适当地处理它。 下面的代码片段中可以看到一个简单的示例：
 //
 //     var wg sync.WaitGroup
 //     wg.Add(1)
@@ -136,6 +141,7 @@ func (f CloserFn) Close() {
 // To ensure that tasks that do get started are sensitive to Quiesce,
 // they need to observe the ShouldQuiesce channel similar to how they
 // are expected to observe context cancellation:
+// 为了确保启动的任务对 Quiesce 敏感，它们需要观察 ShouldQuiesce 通道，类似于它们观察上下文取消的方式：
 //
 //     func x() {
 //       select {

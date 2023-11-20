@@ -338,16 +338,22 @@ func (f *Factory) onMaxConstructorStackDepthExceeded() {
 // onConstructRelational is called as a final step by each factory method that
 // constructs a relational expression, so that any custom manual pattern
 // matching/replacement code can be run.
+// onConstructRelational 作为构造关系表达式的每个工厂方法的最后一步调用，
+// 以便可以运行任何自定义手动模式匹配/替换代码。
 func (f *Factory) onConstructRelational(rel memo.RelExpr) memo.RelExpr {
 	// [SimplifyZeroCardinalityGroup]
 	// SimplifyZeroCardinalityGroup replaces a group with [0 - 0] cardinality
 	// with an empty values expression. It is placed here because it depends on
 	// the logical properties of the group in question.
+	// SimplifyZeroCardinalityGroup 将基数为 [0 - 0] 的组替换为空值表达式。
+	// 它被放置在这里是因为它取决于相关组的逻辑属性。
 	if rel.Op() != opt.ValuesOp {
 		relational := rel.Relational()
 		// We can do this if we only contain leak-proof operators. As an example of
 		// an immutable operator that should not be folded: a Limit on top of an
 		// empty input has to error out if the limit turns out to be negative.
+		// 如果我们只包含防泄漏运算符，我们就可以做到这一点。 作为不应折叠的不可变运算符的示例：
+		// 如果限制结果为负，则空输入顶部的限制必须出错。
 		if relational.Cardinality.IsZero() && relational.VolatilitySet.IsLeakProof() {
 			if f.matchedRule == nil || f.matchedRule(opt.SimplifyZeroCardinalityGroup) {
 				values := f.funcs.ConstructEmptyValues(relational.OutputCols)

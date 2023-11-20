@@ -621,12 +621,17 @@ func (b *Builder) buildRangeCond(
 // checkSubqueryOuterCols uses the subquery outer columns to update the given
 // set of column references and the set of outer columns for any enclosing
 // subuqery. It also performs the following checks:
+// checkSubqueryOuterCols 使用子查询外部列来更新给定的列引用集以及任何封闭子查询的外部列集。
+// 它还执行以下检查：
 //   1. If aggregates are not allowed in the current context (e.g., if we
 //      are building the WHERE clause), it checks that the subquery does not
 //      reference any aggregates from this scope.
+//      如果当前上下文中不允许聚合（例如，如果我们正在构建 WHERE 子句），
+//      它会检查子查询是否引用此范围内的任何聚合。
 //   2. If this is a grouping context, it checks that any outer columns from
 //      the given subquery that reference inScope are either aggregate or
 //      grouping columns in inScope.
+//      如果这是分组上下文，它会检查给定子查询中引用 inScope 的任何外部列是否是 inScope 中的聚合列或分组列。
 func (b *Builder) checkSubqueryOuterCols(
 	subqueryOuterCols opt.ColSet, inGroupingContext bool, inScope *scope, colRefs *opt.ColSet,
 ) {
@@ -637,6 +642,8 @@ func (b *Builder) checkSubqueryOuterCols(
 	// Register the use of correlation to telemetry.
 	// Note: we don't blindly increment the counter every time this
 	// method is called, to avoid double counting the same query.
+	// 注册遥测相关性的使用。
+	// 注意：我们不会在每次调用此方法时盲目地增加计数器，以避免对同一查询进行重复计算。
 	if !b.isCorrelated {
 		b.isCorrelated = true
 		telemetry.Inc(sqltelemetry.CorrelatedSubqueryUseCounter)

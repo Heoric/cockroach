@@ -285,6 +285,9 @@ type FirstRangeProvider interface {
 // lookup or lookups to find replica metadata for implicated key
 // ranges. RPCs are sent to one or more of the replicas to satisfy
 // the method invocation.
+// DistSender 提供了访问 Cockroach 的整体分布式键值存储的方法。
+// 每个方法调用都会触发一个或多个查找来查找所涉及的键范围的副本元数据。
+// RPC 被发送到一个或多个副本以满足方法调用。
 type DistSender struct {
 	log.AmbientContext
 
@@ -511,6 +514,9 @@ func (ds *DistSender) RangeDescriptorCache() *rangecache.RangeCache {
 // DistSender itself as the client.Sender. This means that the scan will recurse
 // into DistSender, which will in turn use the RangeDescriptorCache again to
 // lookup the RangeDescriptor necessary to perform the scan.
+// 它使用 LookupRange 对提供的密钥执行查找扫描，使用 DistSender 本身作为 client.Sender。
+// 这意味着扫描将递归到 DistSender，后者将再次使用 RangeDescriptorCache
+// 来查找执行扫描所需的 RangeDescriptor。
 func (ds *DistSender) RangeLookup(
 	ctx context.Context, key roachpb.RKey, useReverseScan bool,
 ) ([]roachpb.RangeDescriptor, []roachpb.RangeDescriptor, error) {

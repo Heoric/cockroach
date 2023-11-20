@@ -679,7 +679,7 @@ func (oc *OrderingChoice) Copy() OrderingChoice {
 func (oc *OrderingChoice) CanSimplify(fdset *FuncDepSet) bool {
 	if oc.Any() {
 		// Any ordering allowed, so can't simplify further.
-		// 允许任何排序，所以不能进一步简化。
+		// 允许任何排序，所以不能进一步简化。没有排序
 		return false
 	}
 

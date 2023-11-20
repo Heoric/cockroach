@@ -3,16 +3,23 @@
 # and columns (i.e. relational). Many of them correspond to operators in the
 # relational algebra, but there are also variants that are useful for concisely
 # and incrementally expressing transformations.
+# relational.opt 包含所有 Cockroach 物理和逻辑运算符的 Optgen 语言定义，
+# 这些运算符返回具有行和列的表值结果（即关系）。 其中许多对应于关系代数中的运算符，
+# 但也有一些变体可用于简洁和增量地表达转换。
 #
 # Tags
 #
 # Relational - All operators in this file are marked with the Relational tag,
 #              so they can be easily distinguished from Scalar and Enforcer
 #              operators.
+#              该文件中的所有运算符都标有 Relational 标签，因此可以轻松地将它们与
+#              Scalar 和 Enforcer 运算符区分开来。
 #
 # Join - All join operators (inner, left, right, full, semi, anti), as well as
 #        their JoinApply variants, are marked with the Join tag, which allows
 #        any of them to fulfill a Join pattern match.
+#        所有连接运算符（内部、左、右、全、半、反）及其 JoinApply 变体都标有 Join 标签，
+#        这允许它们中的任何一个实现 Join 模式匹配。
 #
 # JoinApply - All join apply operators are marked with the JoinApply tag.
 #             Unlike standard Join operators, JoinApply operators allow the
@@ -20,6 +27,9 @@
 #             Allowing this is useful as an intermediate (or sometimes final)
 #             step in some important transformations (like eliminating
 #             subqueries).
+#             所有加入应用运算符都标有 JoinApply 标签。 与标准 Join 运算符不同，
+#             JoinApply 运算符允许右侧输入引用左侧输入投影的列。
+#             允许这样做作为一些重要转换（例如消除子查询）的中间（或有时是最终）步骤非常有用。
 
 # Scan returns a result set containing every row in a table by scanning one of
 # the table's indexes according to its ordering. The ScanPrivate field

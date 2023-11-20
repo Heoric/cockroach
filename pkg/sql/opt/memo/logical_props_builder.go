@@ -29,14 +29,18 @@ var fdAnnID = opt.NewTableAnnID()
 
 // logicalPropsBuilder is a helper class that consolidates the code that derives
 // a parent expression's logical properties from those of its children.
+// LogicalPropsBuilder 是一个辅助类，它合并了从子表达式派生父表达式逻辑属性的代码。
 //
 // buildProps is called by the memo group construction code in order to
 // initialize the new group's logical properties.
+// buildProps 由备忘录组构造代码调用，以初始化新组的逻辑属性。
 // NOTE: When deriving properties from children, be sure to keep the child
 //       properties immutable by copying them if necessary.
+//       从子属性派生属性时，请务必在必要时通过复制子属性来保持子属性不可变。
 // NOTE: The parent expression is passed as an expression for convenient access
 //       to children, but certain properties on it are not yet defined (like
 //       its logical properties!).
+//       父表达式作为表达式传递，以便于访问子表达式，但其上的某些属性尚未定义（如其逻辑属性！）。
 type logicalPropsBuilder struct {
 	evalCtx *tree.EvalContext
 	mem     *Memo
@@ -47,6 +51,9 @@ type logicalPropsBuilder struct {
 	// to create stats for non-normalized expressions and potentially
 	// mutate opt_tester output compared to cases where checkExpr is
 	// not run.
+	// 当设置为 true 时，disableStats 在逻辑 prop 构建期间禁用统计数据生成。
+	// 当我们不想为非标准化表达式创建统计信息并且与不运行 checkExpr
+	// 的情况相比可能会改变 opt_tester 输出时，在 checkExpr 中很有用。
 	disableStats bool
 }
 

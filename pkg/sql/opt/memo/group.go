@@ -21,6 +21,9 @@ import (
 // group maintains the logical properties shared by members of the group, as
 // well as the physical properties and cost of the best expression in the group
 // once optimization is complete.
+// exprGroup 表示一组逻辑上等效的关系查询计划。 该组指向该组的第一个成员，
+// 后续成员可以通过调用 RelExpr.NextExpr 来访问。
+// 一旦优化完成，该组将维护该组成员共享的逻辑属性，以及该组中最佳表达的物理属性和成本。
 //
 // See comments for Memo, RelExpr, Relational, and Physical for more details.
 type exprGroup interface {

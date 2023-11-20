@@ -121,11 +121,18 @@ type Catalog interface {
 	// DataSource.Name() would be "currentdb.public.t"; the returned
 	// DataSourceName would have the same fields but would still be formatted as
 	// "t".
+	// 解析的 DataSourceName 与生成的 DataSource.Name() 相同，
+	// 只是它具有设置为对应于输入名称的 ExplicitCatalog/ExplicitSchema 标志。
+	// 它的用途主要是用于美容目的。 例如：输入名称可能是“t”。
+	// 完全限定的 DataSource.Name() 将为“currentdb.public.t”；
+	// 返回的 DataSourceName 将具有相同的字段，但格式仍为“t”。
 	//
 	// If no such data source exists, then ResolveDataSource returns an error.
+	// 如果不存在这样的数据源，则 ResolveDataSource 将返回错误。
 	//
 	// NOTE: The returned data source must be immutable after construction, and
 	// so can be safely copied or used across goroutines.
+	// 注意：返回的数据源在构造后必须是不可变的，因此可以跨 goroutine 安全地复制或使用。
 	ResolveDataSource(
 		ctx context.Context, flags Flags, name *DataSourceName,
 	) (DataSource, DataSourceName, error)

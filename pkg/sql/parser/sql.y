@@ -207,16 +207,23 @@ func (s *sqlSymType) SetUnionVal(val interface{}) {
 // The purpose of the sqlSymUnion struct is to reduce the memory footprint of
 // the sqlSymType because only one value (of a variety of types) is ever needed
 // to be stored in the union field at a time.
+// sqlSymUnion 表示类型的联合，提供访问器方法来检索存储在联合的空接口中的基础类型。
+// sqlSymUnion 结构的目的是减少 sqlSymType 的内存占用，
+// 因为一次只需要将一个值（多种类型）存储在 union 字段中。
 //
 // By using an empty interface, we lose the type checking previously provided
 // by yacc and the Go compiler when dealing with union values. Instead, runtime
 // type assertions must be relied upon in the methods below, and as such, the
 // parser should be thoroughly tested whenever new syntax is added.
+// 通过使用空接口，我们在处理联合值时失去了之前由 yacc 和 Go 编译器提供的类型检查。
+// 相反，下面的方法必须依赖运行时类型断言，因此，每当添加新语法时都应该彻底测试解析器。
 //
 // It is important to note that when assigning values to sqlSymUnion.val, all
 // nil values should be typed so that they are stored as nil instances in the
 // empty interface, instead of setting the empty interface to nil. This means
 // that:
+// 需要注意的是，在给 sqlSymUnion.val 赋值时，应输入所有 nil 值，以便将它们作为 nil
+// 实例存储在空接口中，而不是将空接口设置为 nil。 这意味着：
 //     $$ = []String(nil)
 // should be used, instead of:
 //     $$ = nil

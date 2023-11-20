@@ -416,6 +416,11 @@ func (o *Optimizer) optimizeExpr(
 // best expressions available for both the Input and Filter children, and so
 // returns them immediately with no extra work. The Select expression is now
 // costed and added as the best expression without an ordering requirement.
+// 但该过程尚未完成。 遍历 Select 子组后，optimizeExpr 通过使用顶级强制执行器生成满足排序属性的备用计划。
+// 它通过为组#1 递归调用optimizeGroup 来实现此目的，但没有排序要求，类似于它对组#2 所做的操作。
+// 这会触发 Select 运算符的每个子组的优化。
+// 但这一次，备忘录已经具有可用于输入和过滤子项的完全成本计算的最佳表达式，因此无需额外工作即可立即返回它们。
+// Select 表达式现在已计算成本并添加为最佳表达式，无需排序要求。
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -441,6 +446,9 @@ func (o *Optimizer) optimizeExpr(
 // 1.0, because it's sorting a tiny set of filtered rows. That means its total
 // cost is only 111.0, which makes it the new best expression for group #1 with
 // an ordering requirement:
+// 最后，组 #1 的排序执行器有其输入并且可以计算成本。 但与其他排序强制执行器不同，
+// 该执行器只花费 1.0，因为它对一小部分已过滤的行进行排序。
+// 这意味着它的总成本仅为 111.0，这使其成为具有排序要求的第 1 组的新的最佳表达式：
 //
 //   memo
 //    ├── G1: (select G2 G3)
@@ -463,6 +471,7 @@ func (o *Optimizer) optimizeExpr(
 //
 // Now the memo has been fully optimized, and the best expression for group #1
 // and "ordering:y" can be set as the root of the tree by setLowestCostTree:
+// 现在备忘录已经完全优化了，组#1和“ordering:y”的最佳表达式可以通过setLowestCostTree设置为树的根：
 //
 //   sort
 //    ├── columns: x:1(int) y:2(int)
@@ -547,6 +556,10 @@ func (o *Optimizer) optimizeGroup(grp memo.RelExpr, required *physical.Required)
 // addition, optimizeGroupMember calls enforceProps to check whether enforcers
 // can provide the required properties at a lower cost. The lowest cost
 // expression is saved to groupState.
+// optimizeGroupMember 确定组成员表达式是否可以提供所需的属性。
+// 如果是，它会递归地优化表达式的子组并计算表达式的成本。
+// 此外，optimizeGroupMember 调用enforceProps 来检查enforcer
+// 是否可以以较低的成本提供所需的属性。 成本最低的表达式将保存到 groupState 中。
 func (o *Optimizer) optimizeGroupMember(
 	state *groupState, member memo.RelExpr, required *physical.Required,
 ) (fullyOptimized bool) {
@@ -555,6 +568,9 @@ func (o *Optimizer) optimizeGroupMember(
 	// example, it might be better to sort the results of a hash join than to
 	// use the results of a merge join that are already sorted, but at the cost
 	// of requiring one of the merge join children to be sorted.
+	// 计算执行者提供所需属性的成本。 这可能低于提供属性本身的表达式。
+	// 例如，对散列连接的结果进行排序可能比使用已排序的合并连接的结果更好，
+	// 但代价是需要对合并连接子级之一进行排序。
 	fullyOptimized = o.enforceProps(state, member, required)
 
 	// If the expression cannot provide the required properties, then don't
@@ -562,6 +578,8 @@ func (o *Optimizer) optimizeGroupMember(
 	// properties? That case is taken care of by enforceProps, which will
 	// recursively optimize the group with property subsets and then add
 	// enforcers to provide the remainder.
+	// 如果表达式无法提供所需的属性，则不要继续。 但是如果表达式能够提供属性的子集怎么办？
+	// 这种情况由 enforceProps 处理，它将使用属性子集递归优化组，然后添加强制器以提供剩余部分。
 	if CanProvidePhysicalProps(o.evalCtx, member, required) {
 		var cost memo.Cost
 		for i, n := 0, member.ChildCount(); i < n; i++ {
@@ -570,6 +588,7 @@ func (o *Optimizer) optimizeGroupMember(
 			childRequired := BuildChildPhysicalProps(o.mem, member, i, required)
 
 			// Optimize the child with respect to those properties.
+			// 根据这些属性优化子级。
 			childCost, childOptimized := o.optimizeExpr(member.Child(i), childRequired)
 
 			// Accumulate cost of children.
@@ -617,24 +636,34 @@ func (o *Optimizer) optimizeScalarExpr(
 // enforceProps costs an expression where one of the physical properties has
 // been provided by an enforcer rather than by the expression itself. There are
 // two reasons why this is necessary/desirable:
+// enforceProps 花费一个表达式，其中物理属性之一是由执行者而不是表达式本身提供的。
+// 有两个原因说明这是必要/可取的：
 //
 //   1. The expression may not be able to provide the property on its own. For
 //      example, a hash join cannot provide ordered results.
+//      该表达式可能无法单独提供该属性。 例如，散列连接无法提供有序结果。
 //   2. The enforcer might be able to provide the property at lower overall
 //      cost. For example, an enforced sort on top of a hash join might be
 //      lower cost than a merge join that is already sorted, but at the cost of
 //      requiring one of its children to be sorted.
+//      执行者也许能够以较低的总成本提供财产。 例如，
+//      在散列连接之上进行强制排序可能比已排序的合并连接成本更低，但代价是要求其子级之一进行排序。
 //
 // Note that enforceProps will recursively optimize this same group, but with
 // one less required physical property. The recursive call will eventually make
 // its way back here, at which point another physical property will be stripped
 // off, and so on. Afterwards, the group will have computed a lowest cost
 // expression for each sublist of physical properties, from all down to none.
+// 请注意，enforceProps 将递归地优化同一组，但所需的物理属性较少。 递归调用最终将回到这里，
+// 此时另一个物理属性将被剥离，依此类推。 之后，该小组将为每个物理属性子列表计算一个最低成本表达式，从全部到无。
 //
 // Right now, the only physical property that can be provided by an enforcer is
 // physical.Required.Ordering. When adding another enforceable property, also
 // update shouldExplore, which should return true if enforceProps will explore
 // the group by recursively calling optimizeGroup (by way of optimizeEnforcer).
+// 目前，强制执行者可以提供的唯一物理属性是physical.Required.Ordering。
+// 添加另一个可执行属性时，还要更新shouldExplore，
+// 如果enforceProps将通过递归调用optimizeGroup（通过optimizeEnforcer）来探索该组，则它应该返回true。
 func (o *Optimizer) enforceProps(
 	state *groupState, member memo.RelExpr, required *physical.Required,
 ) (fullyOptimized bool) {
@@ -642,6 +671,8 @@ func (o *Optimizer) enforceProps(
 	// stripped by recursively optimizing the group with successively fewer
 	// properties. The properties are stripped off in a heuristic order, from
 	// least likely to be expensive to enforce to most likely.
+	// 去掉一个可以强制执行的属性。 其他属性将通过递归优化具有逐渐减少的属性的组来剥离。
+	// 这些属性按照启发式顺序剥离，从执行成本最低的到执行成本最高的。
 	if !required.Distribution.Any() {
 		enforcer := &memo.DistributeExpr{Input: member}
 		memberProps := BuildChildPhysicalProps(o.mem, enforcer, 0, required)
@@ -650,6 +681,7 @@ func (o *Optimizer) enforceProps(
 
 	if !required.Ordering.Any() {
 		// Try Sort enforcer that requires no ordering from its input.
+		// 尝试不需要对其输入进行排序的排序强制执行器。
 		enforcer := &memo.SortExpr{Input: member}
 		memberProps := BuildChildPhysicalProps(o.mem, enforcer, 0, required)
 		fullyOptimized = o.optimizeEnforcer(state, enforcer, required, member, memberProps)
@@ -659,6 +691,8 @@ func (o *Optimizer) enforceProps(
 		// required ordering. We do not need to add the enforcer if the required
 		// ordering is implied by the input ordering (in which case the returned
 		// prefix is nil).
+		// 尝试需要对其输入进行部分排序的排序强制执行器。 选择与所需排序形成最长公共前缀的有趣排序。
+		// 如果输入排序隐含了所需的排序（在这种情况下返回的前缀为零），我们不需要添加强制执行器。
 		interestingOrderings := ordering.DeriveInterestingOrderings(member)
 		longestCommonPrefix := interestingOrderings.LongestCommonPrefix(&required.Ordering)
 		if longestCommonPrefix != nil {

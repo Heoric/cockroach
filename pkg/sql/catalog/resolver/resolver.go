@@ -207,6 +207,9 @@ func ResolveExistingObject(
 			// we can populate a more appropriate error regarding what part of the
 			// name does not exist. If we're searching the empty database explicitly,
 			// then all bets are off and just return an undefined object error.
+			// ResolveExisting 的约定是，如果数据库或模式存在，那么即使对象不存在，它们也会填充在前缀中。
+			// 如果我们有明确的名称，我们可以填充一个更合适的错误，说明名称的哪一部分不存在。
+			// 如果我们显式搜索空数据库，那么所有的赌注都会被取消，只会返回一个未定义的对象错误。
 			if un.HasExplicitCatalog() && un.Catalog() != "" {
 				if prefix.Database == nil {
 					return nil, prefix, sqlerrors.NewUndefinedDatabaseError(un.Catalog())
@@ -375,16 +378,23 @@ func GetForDatabase(
 // prefix qualification for the object. For example, if the unresolved
 // name was "a.b" and the name was resolved to "a.public.b", the
 // prefix "a.public" is returned.
+// ResolveExisting 当预期目标对象已经存在时，对对象名称执行名称解析。
+// 它不会改变输入名称。 它还返回对象的已解析前缀限定。 例如，如果未解析的名称为“a.b”，
+// 并且该名称已解析为“a.public.b”，则返回前缀“a.public”。
 //
 // Note that the returned prefix will be populated with the relevant found
 // components because LookupObject retains those components. This is error
 // prone and exists only for backwards compatibility with certain error
 // reporting behaviors.
+// 请注意，返回的前缀将填充相关的找到的组件，因为 LookupObject 保留了这些组件。
+// 这很容易出错，并且存在只是为了向后兼容某些错误报告行为。
 //
 // Note also that if the implied current database does not exist and the name
 // is either unqualified or qualified by a virtual schema, an error will be
 // returned to indicate that the database does not exist. This error will be
 // returned regardless of the value set on the Required flag.
+// 另请注意，如果隐含的当前数据库不存在并且名称未限定或由虚拟模式限定，则会返回错误以指示数据库不存在。
+// 无论“必需”标志上设置的值如何，都会返回此错误。
 func ResolveExisting(
 	ctx context.Context,
 	u *tree.UnresolvedObjectName,

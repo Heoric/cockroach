@@ -33,13 +33,16 @@ import (
 
 const (
 	// offset64 is the initial hash value, and is taken from fnv.go
+	// offset64是初始哈希值，取自fnv.go
 	offset64 = 14695981039346656037
 
 	// prime64 is a large-ish prime number used in hashing and taken from fnv.go.
+	// prime64 是一个用于散列的大质数，取自 fnv.go。
 	prime64 = 1099511628211
 )
 
 // internHash is a 64-bit hash value, computed using the FNV-1a algorithm.
+// internHash 是一个 64 位哈希值，使用 FNV-1a 算法计算。
 type internHash uint64
 
 // interner interns relational and scalar expressions, which means that multiple
@@ -51,11 +54,17 @@ type internHash uint64
 // equivalent only if their binary encoded representations are identical. For
 // example, positive and negative float64 values *are not* equivalent, whereas
 // NaN float values *are* equivalent.
+// interner 实习生关系和标量表达式，这意味着多个等效表达式被映射到单个内存实例。
+// 如果对所有字段具有相同值的两个表达式进行实习，则实习方法将在两种情况下返回第一个表达式。
+// 因此，可以通过简单的指针比较来检查内部表达式的等效性。 等价性的定义比 SQL 等价性更严格；
+// 仅当两个值的二进制编码表示相同时，它们才等效。 例如，正和负 float64 值*不*等价，而 NaN 浮点值*等价。
 //
 // To use interner, first call the Init method to initialize storage. Call the
 // appropriate Intern method to retrieve the canonical instance of that
 // expression. Release references to other instances, including the expression
 // passed to Intern.
+// 要使用interner，首先调用Init方法初始化存储。 调用适当的 Intern 方法来检索该表达式的规范实例。
+// 释放对其他实例的引用，包括传递给 Intern 的表达式。
 //
 // The interner computes a hash function for each expression operator type that
 // enables quick determination of whether an expression has already been added
@@ -66,34 +75,50 @@ type internHash uint64
 // used, interned expressions must remain immutable after interning. That is,
 // once set, they can never be modified again, else their hash value would
 // become invalid.
+// 内部计算每个表达式运算符类型的哈希函数，以便快速确定表达式是否已添加到内部。
+// 必须为每个表达式结构中每个字段的每个唯一类型添加 hashXXX 和 isXXXEqual 方法。
+// Optgen 生成 Intern 方法，这些方法使用这些方法来计算哈希并检查缓存中是否已存在等效表达式。
+// 由于使用了散列，因此驻留表达式在驻留后必须保持不可变。
+// 也就是说，一旦设置，它们就不能再次修改，否则它们的哈希值将变得无效。
 //
 // The non-cryptographic hash function is adapted from fnv.go in Golang's
 // standard library. That in turn was taken from FNV-1a, described here:
+// 非加密哈希函数改编自Golang标准库中的fnv.go。 这又取自 FNV-1a，如下所述：
 //
 //   https://en.wikipedia.org/wiki/Fowler-Noll-Vo_hash_function
 //
 // Each expression type follows the same interning pattern:
+// 每个表达式类型都遵循相同的实习模式：
 //
 //   1. Compute an int64 hash value for the expression using FNV-1a.
+//      使用 FNV-1a 计算表达式的 int64 哈希值。
 //   2. Do a fast 64-bit Go map lookup to determine if an expression with the
 //      same hash is already in the cache.
+//      执行快速 64 位 Go 映射查找以确定具有相同哈希值的表达式是否已在缓存中。
 //   3. If so, then test whether the existing expression is equivalent, since
 //      there may be a hash value collision.
+//      如果是，则测试现有表达式是否等效，因为可能存在哈希值冲突。
 //   4. Expressions with colliding hash values are linked together in a list.
 //      Rather than use an explicit linked list data structure, colliding
 //      entries are rehashed using a randomly generated hash value that is
 //      stored in the existing entry. This effectively uses the Go map as if it
 //      were a hash table of size 2^64.
+//      具有冲突哈希值的表达式在列表中链接在一起。 冲突条目不是使用显式链表数据结构，
+//      而是使用存储在现有条目中的随机生成的哈希值进行重新哈希。
+//      这有效地使用了 Go 映射，就好像它是大小为 2^64 的哈希表一样。
 //
 // This pattern enables very low overhead hashing of expressions - the
 // allocation of a Go map with a fast 64-bit key, plus a couple of reusable
 // scratch byte arrays.
+// 此模式可实现非常低开销的表达式散列 - 使用快速 64 位密钥分配 Go 映射，以及几个可重用的临时字节数组。
 type interner struct {
 	// hasher is a helper struct to compute hashes and test equality.
+	// hasher 是一个用于计算哈希值和测试相等性的辅助结构。
 	hasher hasher
 
 	// cache is a helper struct that implements the interning pattern described
 	// in the header over a Go map.
+	// cache 是一个辅助结构体，它通过 Go 映射实现标头中描述的驻留模式。
 	cache internCache
 }
 
@@ -110,6 +135,9 @@ var physPropsTypePtr = uint64(reflect.ValueOf(physPropsType).Pointer())
 // This intern method does not force the incoming physical properties to escape
 // to the heap. It does this by making a copy of the physical properties before
 // adding them to the cache.
+// InternPhysicalProps 使用与表达式 intern 方法使用的模式相同的模式来实习一组物理属性，
+// 但有一点不同。 此实习生方法不会强制传入的物理属性逃逸到堆中。
+// 它通过在将物理属性添加到缓存之前制作物理属性的副本来实现此目的。
 func (in *interner) InternPhysicalProps(val *physical.Required) *physical.Required {
 	// Hash the physical.Required reflect type to distinguish it from other values.
 	in.hasher.Init()
@@ -120,6 +148,7 @@ func (in *interner) InternPhysicalProps(val *physical.Required) *physical.Requir
 	in.cache.Start(in.hasher.hash)
 	for in.cache.Next() {
 		// There's an existing item, so check for equality.
+		// 有一个现有项目，因此检查是否相等。
 		if existing, ok := in.cache.Item().(*physical.Required); ok {
 			if in.hasher.IsPhysPropsEqual(val, existing) {
 				// Found equivalent item, so return it.
@@ -136,6 +165,7 @@ func (in *interner) InternPhysicalProps(val *physical.Required) *physical.Requir
 
 // internCache is a helper class that implements the interning pattern described
 // in the comment for the interner struct. Here is a usage example:
+// internCache 是一个帮助器类，它实现内部结构注释中描述的实习模式。 这是一个用法示例：
 //
 //   var cache internCache
 //   cache.Start(hash)
@@ -149,17 +179,23 @@ func (in *interner) InternPhysicalProps(val *physical.Required) *physical.Requir
 // The calls to the Next method iterate over any entries with the same hash,
 // until either a match is found or it is proven their are no matches, in which
 // case the new item can be added to the cache.
+// 对 Next 方法的调用会迭代具有相同哈希值的任何条目，直到找到匹配项或证明它们不匹配，
+// 在这种情况下，可以将新项添加到缓存中。
 type internCache struct {
 	// cache is a Go map that's being used as if it were a hash table of size
 	// 2^64. Items are hashed according to their 64-bit hash value, and any
 	// colliding entries are linked together using the collision field in
 	// cacheEntry.
+	// 缓存是一个 Go 映射，它的使用就像是一个大小为 2^64 的哈希表。
+	// 项目根据其 64 位哈希值进行哈希处理，并且任何冲突条目都使用 cacheEntry 中的冲突字段链接在一起。
 	cache map[internHash]cacheEntry
 
 	// hash stores the lookup value used by the next call to the Next method.
+	// hash 存储下次调用 Next 方法时使用的查找值。
 	hash internHash
 
 	// prev stores the cache entry last fetched from the map by the Next method.
+	// prev 存储 Next 方法最后从映射中获取的缓存条目。
 	prev cacheEntry
 }
 
@@ -170,6 +206,10 @@ type internCache struct {
 // consists of computing an initial hash based on the value of the node, and
 // then following the list of collision hash values by indexing into the cache
 // map repeatedly.
+// cacheEntry是Go映射值。 当哈希值发生冲突时，它充当链表节点；
+// 它的碰撞字段是一个随机生成的重新哈希值，“指向”碰撞节点。
+// 该节点又可以指向另一个冲突节点，依此类推。 因此，
+// 遍历冲突列表包括根据节点的值计算初始哈希，然后通过重复索引到缓存映射来跟踪冲突哈希值列表。
 type cacheEntry struct {
 	item      interface{}
 	collision internHash

@@ -24,13 +24,18 @@ import (
 // operator. It is used to describe where the data will be physically located
 // during execution, to enable more accurate costing of each operator by taking
 // latency and network bandwidth into account.
+// Distribution 表示关系运算符的数据的物理分布。
+// 它用于描述数据在执行期间的物理位置，以便通过考虑延迟和网络带宽来更准确地计算每个操作员的成本。
 type Distribution struct {
 	// Regions is the set of regions that make up this Distribution. They should
 	// be sorted in lexicographical order.
+	// Regions 是构成此分布的区域集。 它们应该按字典顺序排序。
 	// TODO(rytaft): Consider abstracting this to a list of "neighborhoods" to
 	// support more different types of localities.
+	// 考虑将其抽象为“社区”列表，以支持更多不同类型的地点。
 	// TODO(rytaft): Consider mapping the region strings to integers and storing
 	// this as a FastIntSet.
+	// 考虑将区域字符串映射到整数并将其存储为 FastIntSet。
 	Regions []string
 }
 
@@ -70,6 +75,7 @@ func (d Distribution) Equals(rhs Distribution) bool {
 
 // Union unions the other distribution with the given distribution,
 // removing duplicates. It assumes both distributions are sorted.
+// Union 将另一个分布与给定分布联合起来，删除重复项。 它假设两个分布都已排序。
 func (d Distribution) Union(rhs Distribution) Distribution {
 	regions := make([]string, 0, len(d.Regions)+len(rhs.Regions))
 	l, r := 0, 0
