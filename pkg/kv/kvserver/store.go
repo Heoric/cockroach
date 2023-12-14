@@ -431,6 +431,10 @@ usually corresponding to a dedicated storage medium. It also houses a collection
 of subsystems that, in broad terms, perform maintenance of each Replica on the
 Store when required. In particular, this includes various queues such as the
 split, merge, rebalance, GC, and replicaGC queues (to name just a few).
+一个Store维护了一组Replica，这些Replica的数据存储在一个storage.Engine上，
+通常对应一个专用的存储介质。 它还包含一组子系统，从广义上讲，
+这些子系统在需要时对存储中的每个副本进行维护。
+特别是，这包括各种队列，例如拆分、合并、重新平衡、GC 和副本GC 队列（仅举几例）。
 
 INVARIANT: the set of all Ranges (as determined by, e.g. a transactionally
 consistent scan of the meta index ranges) always exactly covers the addressable

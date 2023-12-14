@@ -11,6 +11,7 @@
 /*
 Package apply provides abstractions and routines associated with the application
 of committed raft entries to a replicated state machine.
+apply 包提供了与将提交的 raft 条目应用到复制状态机相关的抽象和例程。
 
 State Machine Replication
 
@@ -20,6 +21,9 @@ state machines of each member of the raft group (i.e. each replica). Committed
 entries are decoded into commands in the same order that they are arranged in
 the raft log (i.e. in order of increasing log index). This ordering of decoded
 commands is then treated as the input to state transitions on each replica.
+Raft 条目应用程序是通过 raft 共识获取已提交到 raft 组的“raft 日志”的条目，并使用它们驱动
+raft 组中每个成员（即每个副本）的状态机的过程。 提交的条目按照它们在 raft 日志中排列的顺序
+（即按照日志索引递增的顺序）解码为命令。 然后，解码命令的这种排序被视为每个副本上状态转换的输入。
 
 The key to this general approach, known as "state machine replication", is that
 all state transitions are fully deterministic given only the current state of
@@ -30,6 +34,12 @@ replicas start as identical copies of each other and we ensure that all replicas
 perform the same state transitions, in the same order, deterministically, then
 through induction we know that all replicas will remain identical copies of each
 other when compared at the same log index.
+这种通用方法（称为“状态机复制”）的关键在于，仅考虑机器的当前状态和作为输入应用的命令，
+所有状态转换都是完全确定性的。 这确保了如果每个实例都是从相同的一致共享日志
+（相同的条目、相同的顺序）驱动的，那么它们都将保持同步。
+换句话说，如果我们确保所有副本开始时都是彼此相同的副本，并且确保所有副本以相同的顺序、
+确定性地执行相同的状态转换，那么通过归纳，我们知道所有副本将保持每个副本的相同副本
+在相同的日志索引下比较时的其他。
 
 This poses a problem for replicas that fail for any reason to apply an entry. If
 the failure wasn't deterministic across all replicas then they can't carry on
